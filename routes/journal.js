@@ -621,4 +621,408 @@ router.get('/meal_logs', async (req, res) => {
     }
 });
 
+// GET /api/nutrition/analysis/:userId - Get nutrition analysis based on user's log data
+router.get('/nutrition/analysis/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Get user's nutrition data from the last 3 months
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        
+        const query = `
+            SELECT 
+                AVG(calories) as avg_calories,
+                AVG(protein) as avg_protein,
+                AVG(carbs) as avg_carbs,
+                AVG(fiber) as avg_fiber,
+                AVG(breakfast_calories + lunch_calories + dinner_calories + snack_calories) as total_calories,
+                AVG(breakfast_protein + lunch_protein + dinner_protein + snack_protein) as total_protein,
+                AVG(breakfast_carbs + lunch_carbs + dinner_carbs + snack_carbs) as total_carbs,
+                AVG(breakfast_fiber + lunch_fiber + dinner_fiber + snack_fiber) as total_fiber,
+                AVG(breakfast_fat + lunch_fat + dinner_fat + snack_fat) as total_fat
+            FROM journal_entries 
+            WHERE user_id = $1 
+            AND entry_date >= $2
+            AND (calories > 0 OR protein > 0 OR carbs > 0)
+        `;
+        
+        const result = await db.query(query, [userId, threeMonthsAgo.toISOString().split('T')[0]]);
+        
+        if (result.rows.length === 0) {
+            return res.json({
+                deficiencies: [],
+                recommendations: ["Start logging your meals to get personalized nutrition analysis"],
+                overall_score: 0,
+                last_updated: new Date().toISOString()
+            });
+        }
+        
+        const data = result.rows[0];
+        
+        // IBD-specific nutrition benchmarks based on research
+        const benchmarks = {
+            calories: { recommended: 2000, unit: "kcal" },
+            protein: { recommended: 1.2, unit: "g/kg" }, // Higher protein for IBD patients
+            carbs: { recommended: 250, unit: "g" },
+            fiber: { recommended: 25, unit: "g" }, // Lower fiber for IBD patients
+            fat: { recommended: 65, unit: "g" }
+        };
+        
+        // Calculate deficiencies
+        const deficiencies = [];
+        let overallScore = 100;
+        
+        // Protein analysis (critical for IBD)
+        const proteinDeficiency = calculateDeficiency(
+            "Protein", 
+            data.total_protein || 0, 
+            benchmarks.protein.recommended * 70, // Assuming 70kg average weight
+            "Protein is crucial for tissue repair and immune function in IBD patients"
+        );
+        if (proteinDeficiency) {
+            deficiencies.push(proteinDeficiency);
+            overallScore -= 20;
+        }
+        
+        // Fiber analysis (lower tolerance in IBD)
+        const fiberDeficiency = calculateDeficiency(
+            "Fiber", 
+            data.total_fiber || 0, 
+            benchmarks.fiber.recommended,
+            "Fiber should be limited during flares but important for gut health"
+        );
+        if (fiberDeficiency) {
+            deficiencies.push(fiberDeficiency);
+            overallScore -= 15;
+        }
+        
+        // Calories analysis
+        const calorieDeficiency = calculateDeficiency(
+            "Calories", 
+            data.total_calories || 0, 
+            benchmarks.calories.recommended,
+            "Adequate calories are essential for maintaining weight and energy"
+        );
+        if (calorieDeficiency) {
+            deficiencies.push(calorieDeficiency);
+            overallScore -= 15;
+        }
+        
+        // Generate recommendations
+        const recommendations = generateNutritionRecommendations(deficiencies, data);
+        
+        res.json({
+            deficiencies: deficiencies,
+            recommendations: recommendations,
+            overall_score: max(0, overallScore),
+            last_updated: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error analyzing nutrition:', error);
+        res.status(500).json({ 
+            error: 'Failed to analyze nutrition',
+            details: error.message 
+        });
+    }
+});
+
+// GET /api/flare-risk/:userId - Get flare risk analysis based on 3 months of data
+router.get('/flare-risk/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Get user's data from the last 3 months
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        
+        const query = `
+            SELECT 
+                entry_date,
+                pain_severity,
+                bowel_frequency,
+                blood_present,
+                urgency_level,
+                bristol_scale,
+                stress_level,
+                fatigue_level,
+                sleep_hours,
+                medication_taken,
+                calories,
+                protein,
+                fiber
+            FROM journal_entries 
+            WHERE user_id = $1 
+            AND entry_date >= $2
+            ORDER BY entry_date ASC
+        `;
+        
+        const result = await db.query(query, [userId, threeMonthsAgo.toISOString().split('T')[0]]);
+        
+        if (result.rows.length === 0) {
+            return res.json({
+                current_risk: "low",
+                trend: [],
+                factors: [],
+                last_updated: new Date().toISOString()
+            });
+        }
+        
+        // Calculate flare risk trend
+        const trend = calculateFlareRiskTrend(result.rows);
+        
+        // Calculate current risk level
+        const currentRisk = calculateCurrentRisk(result.rows);
+        
+        // Identify risk factors
+        const factors = identifyRiskFactors(result.rows);
+        
+        res.json({
+            current_risk: currentRisk,
+            trend: trend,
+            factors: factors,
+            last_updated: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error calculating flare risk:', error);
+        res.status(500).json({ 
+            error: 'Failed to calculate flare risk',
+            details: error.message 
+        });
+    }
+});
+
+// Helper function to calculate nutrition deficiency
+function calculateDeficiency(nutrient, current, recommended, impact) {
+    const percentage = (current / recommended) * 100;
+    
+    if (percentage >= 90) return null; // No deficiency
+    
+    let severity = "low";
+    if (percentage < 50) severity = "critical";
+    else if (percentage < 70) severity = "high";
+    else if (percentage < 90) severity = "moderate";
+    
+    const foodSources = getFoodSources(nutrient);
+    
+    return {
+        nutrient: nutrient,
+        current_level: Math.round(current * 10) / 10,
+        recommended_level: recommended,
+        severity: severity,
+        impact: impact,
+        food_sources: foodSources
+    };
+}
+
+// Helper function to get food sources for nutrients
+function getFoodSources(nutrient) {
+    const sources = {
+        "Protein": ["Lean meats", "Fish", "Eggs", "Greek yogurt", "Legumes"],
+        "Fiber": ["Cooked vegetables", "Well-cooked grains", "Bananas", "Applesauce"],
+        "Calories": ["Nut butters", "Avocado", "Olive oil", "Nuts", "Seeds"],
+        "Carbs": ["White rice", "Potatoes", "Bananas", "Applesauce", "Oatmeal"],
+        "Fat": { recommended: 65, unit: "g" }
+    };
+    
+    return sources[nutrient] || ["Consult with your dietitian"];
+}
+
+// Helper function to generate nutrition recommendations
+function generateNutritionRecommendations(deficiencies, data) {
+    const recommendations = [];
+    
+    if (deficiencies.length === 0) {
+        recommendations.push("Excellent nutrition balance! Keep up the good work.");
+        return recommendations;
+    }
+    
+    deficiencies.forEach(deficiency => {
+        switch (deficiency.nutrient) {
+            case "Protein":
+                recommendations.push("Increase protein intake with lean meats, fish, or plant-based sources");
+                break;
+            case "Fiber":
+                recommendations.push("Consider soluble fiber sources like bananas and well-cooked vegetables");
+                break;
+            case "Calories":
+                recommendations.push("Add calorie-dense foods like nut butters and healthy fats");
+                break;
+        }
+    });
+    
+    recommendations.push("Consult with your healthcare team for personalized nutrition advice");
+    
+    return recommendations.slice(0, 3); // Limit to 3 recommendations
+}
+
+// Helper function to calculate flare risk trend
+function calculateFlareRiskTrend(entries) {
+    const trend = [];
+    const weeklyData = groupByWeek(entries);
+    
+    weeklyData.forEach((weekData, weekStart) => {
+        const riskScore = calculateWeeklyRiskScore(weekData);
+        const riskLevel = getRiskLevel(riskScore);
+        
+        trend.push({
+            date: weekStart,
+            risk_level: riskLevel,
+            score: riskScore
+        });
+    });
+    
+    return trend;
+}
+
+// Helper function to group entries by week
+function groupByWeek(entries) {
+    const weeklyData = new Map();
+    
+    entries.forEach(entry => {
+        const date = new Date(entry.entry_date);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weeklyData.has(weekKey)) {
+            weeklyData.set(weekKey, []);
+        }
+        weeklyData.get(weekKey).push(entry);
+    });
+    
+    return weeklyData;
+}
+
+// Helper function to calculate weekly risk score
+function calculateWeeklyRiskScore(weekEntries) {
+    if (weekEntries.length === 0) return 0;
+    
+    let totalScore = 0;
+    let maxScore = 0;
+    
+    weekEntries.forEach(entry => {
+        let dayScore = 0;
+        
+        // Pain severity (0-10 scale)
+        dayScore += (entry.pain_severity || 0) * 5;
+        
+        // Bowel frequency (high frequency = higher risk)
+        if (entry.bowel_frequency > 5) dayScore += 15;
+        else if (entry.bowel_frequency > 3) dayScore += 10;
+        
+        // Blood present
+        if (entry.blood_present) dayScore += 20;
+        
+        // Urgency level (0-10 scale)
+        dayScore += (entry.urgency_level || 0) * 2;
+        
+        // Stress level (0-10 scale)
+        dayScore += (entry.stress_level || 5) * 1.5;
+        
+        // Poor sleep
+        if (entry.sleep_hours < 6) dayScore += 10;
+        
+        // Medication adherence
+        if (!entry.medication_taken) dayScore += 15;
+        
+        totalScore += dayScore;
+        maxScore = Math.max(maxScore, dayScore);
+    });
+    
+    // Return average score, but weight recent days more heavily
+    const avgScore = totalScore / weekEntries.length;
+    const weightedScore = (avgScore * 0.7) + (maxScore * 0.3);
+    
+    return Math.min(100, Math.round(weightedScore));
+}
+
+// Helper function to get risk level from score
+function getRiskLevel(score) {
+    if (score < 20) return "low";
+    if (score < 40) return "moderate";
+    if (score < 60) return "high";
+    return "very_high";
+}
+
+// Helper function to calculate current risk
+function calculateCurrentRisk(entries) {
+    if (entries.length === 0) return "low";
+    
+    // Use the last 7 days for current risk
+    const last7Days = entries.slice(-7);
+    const currentScore = calculateWeeklyRiskScore(last7Days);
+    
+    return getRiskLevel(currentScore);
+}
+
+// Helper function to identify risk factors
+function identifyRiskFactors(entries) {
+    if (entries.length === 0) return [];
+    
+    const factors = [];
+    const last30Days = entries.slice(-30);
+    
+    // Check for high pain levels
+    const highPainDays = last30Days.filter(entry => (entry.pain_severity || 0) > 5).length;
+    if (highPainDays > 5) {
+        factors.push({
+            factor: "High Pain Levels",
+            impact: Math.min(0.9, highPainDays / 30),
+            description: `${highPainDays} days with pain severity > 5`
+        });
+    }
+    
+    // Check for blood presence
+    const bloodDays = last30Days.filter(entry => entry.blood_present).length;
+    if (bloodDays > 0) {
+        factors.push({
+            factor: "Blood in Stool",
+            impact: Math.min(0.9, bloodDays / 30),
+            description: `${bloodDays} days with blood present`
+        });
+    }
+    
+    // Check for high stress
+    const avgStress = last30Days.reduce((sum, entry) => sum + (entry.stress_level || 5), 0) / last30Days.length;
+    if (avgStress > 7) {
+        factors.push({
+            factor: "High Stress Levels",
+            impact: (avgStress - 5) / 5,
+            description: `Average stress level: ${Math.round(avgStress)}/10`
+        });
+    }
+    
+    // Check for poor sleep
+    const poorSleepDays = last30Days.filter(entry => (entry.sleep_hours || 8) < 6).length;
+    if (poorSleepDays > 10) {
+        factors.push({
+            factor: "Poor Sleep",
+            impact: Math.min(0.8, poorSleepDays / 30),
+            description: `${poorSleepDays} days with < 6 hours sleep`
+        });
+    }
+    
+    // Check for medication non-adherence
+    const missedMedDays = last30Days.filter(entry => !entry.medication_taken).length;
+    if (missedMedDays > 5) {
+        factors.push({
+            factor: "Medication Non-adherence",
+            impact: Math.min(0.9, missedMedDays / 30),
+            description: `${missedMedDays} days without medication`
+        });
+    }
+    
+    return factors.sort((a, b) => b.impact - a.impact).slice(0, 5);
+}
+
+// Helper function for Math.max
+function max(a, b) {
+    return a > b ? a : b;
+}
+
 module.exports = router; 
