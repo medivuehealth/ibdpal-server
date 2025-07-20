@@ -330,20 +330,41 @@ async function updateJournalEntry(entryId, journalData, res) {
     });
 }
 
-// GET /api/journal/entries/:username - Get all journal entries for a user
+// GET /api/journal/entries/:username - Get journal entries for a user (optionally filtered by date)
 router.get('/entries/:username', async (req, res) => {
     try {
         const { username } = req.params;
+        const { date } = req.query;
         
-        // Get journal entries by joining with users table
-        const query = `
-            SELECT je.* FROM journal_entries je
-            JOIN users u ON je.user_id = u.user_id
-            WHERE u.email = $1 
-            ORDER BY je.entry_date DESC, je.created_at DESC
-        `;
+        console.log('📅 Fetching entries for user:', username, 'date:', date);
         
-        const result = await db.query(query, [username]);
+        let query;
+        let queryParams;
+        
+        if (date) {
+            // Filter by specific date
+            query = `
+                SELECT je.* FROM journal_entries je
+                JOIN users u ON je.user_id = u.user_id
+                WHERE u.email = $1 AND je.entry_date = $2
+                ORDER BY je.created_at DESC
+            `;
+            queryParams = [username, date];
+            console.log('🔍 Filtering entries by date:', date);
+        } else {
+            // Get all entries for user
+            query = `
+                SELECT je.* FROM journal_entries je
+                JOIN users u ON je.user_id = u.user_id
+                WHERE u.email = $1 
+                ORDER BY je.entry_date DESC, je.created_at DESC
+            `;
+            queryParams = [username];
+            console.log('📋 Fetching all entries for user');
+        }
+        
+        const result = await db.query(query, queryParams);
+        console.log('✅ Found', result.rows.length, 'entries');
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching journal entries:', error);
