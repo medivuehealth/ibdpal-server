@@ -51,10 +51,15 @@ async function createJournalEntry(journalData, res) {
             bristol_scale, urgency_level, blood_present, pain_location,
             pain_severity, pain_time, medication_taken, medication_type,
             dosage_level, sleep_hours, stress_level, menstruation,
-            fatigue_level, notes, breakfast, lunch, dinner, snacks
+            fatigue_level, notes, breakfast, lunch, dinner, snacks,
+            breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
+            lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
+            dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
+            snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+                $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
+                $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
         RETURNING entry_id;
     `;
 
@@ -106,7 +111,28 @@ async function createJournalEntry(journalData, res) {
         journalData.breakfast || '',
         journalData.lunch || '',
         journalData.dinner || '',
-        journalData.snacks || ''
+        journalData.snacks || '',
+        // Individual meal nutrition
+        journalData.breakfast_calories || 0,
+        journalData.breakfast_protein || 0,
+        journalData.breakfast_carbs || 0,
+        journalData.breakfast_fiber || 0,
+        journalData.breakfast_fat || 0,
+        journalData.lunch_calories || 0,
+        journalData.lunch_protein || 0,
+        journalData.lunch_carbs || 0,
+        journalData.lunch_fiber || 0,
+        journalData.lunch_fat || 0,
+        journalData.dinner_calories || 0,
+        journalData.dinner_protein || 0,
+        journalData.dinner_carbs || 0,
+        journalData.dinner_fiber || 0,
+        journalData.dinner_fat || 0,
+        journalData.snack_calories || 0,
+        journalData.snack_protein || 0,
+        journalData.snack_carbs || 0,
+        journalData.snack_fiber || 0,
+        journalData.snack_fat || 0
     ];
 
     console.log('Executing journal entry query with values:', journalValues);
@@ -153,7 +179,28 @@ async function updateJournalEntry(entryId, journalData, res) {
         'breakfast': journalData.breakfast,
         'lunch': journalData.lunch,
         'dinner': journalData.dinner,
-        'snacks': journalData.snacks
+        'snacks': journalData.snacks,
+        // Individual meal nutrition
+        'breakfast_calories': journalData.breakfast_calories,
+        'breakfast_protein': journalData.breakfast_protein,
+        'breakfast_carbs': journalData.breakfast_carbs,
+        'breakfast_fiber': journalData.breakfast_fiber,
+        'breakfast_fat': journalData.breakfast_fat,
+        'lunch_calories': journalData.lunch_calories,
+        'lunch_protein': journalData.lunch_protein,
+        'lunch_carbs': journalData.lunch_carbs,
+        'lunch_fiber': journalData.lunch_fiber,
+        'lunch_fat': journalData.lunch_fat,
+        'dinner_calories': journalData.dinner_calories,
+        'dinner_protein': journalData.dinner_protein,
+        'dinner_carbs': journalData.dinner_carbs,
+        'dinner_fiber': journalData.dinner_fiber,
+        'dinner_fat': journalData.dinner_fat,
+        'snack_calories': journalData.snack_calories,
+        'snack_protein': journalData.snack_protein,
+        'snack_carbs': journalData.snack_carbs,
+        'snack_fiber': journalData.snack_fiber,
+        'snack_fat': journalData.snack_fat
     };
 
     Object.entries(fieldsToUpdate).forEach(([field, value]) => {
@@ -301,7 +348,28 @@ router.put('/entries/:entryId', async (req, res) => {
             'stress_level': journalData.stress_level,
             'menstruation': journalData.menstruation,
             'fatigue_level': journalData.fatigue_level,
-            'notes': journalData.notes
+            'notes': journalData.notes,
+            // Individual meal nutrition
+            'breakfast_calories': journalData.breakfast_calories,
+            'breakfast_protein': journalData.breakfast_protein,
+            'breakfast_carbs': journalData.breakfast_carbs,
+            'breakfast_fiber': journalData.breakfast_fiber,
+            'breakfast_fat': journalData.breakfast_fat,
+            'lunch_calories': journalData.lunch_calories,
+            'lunch_protein': journalData.lunch_protein,
+            'lunch_carbs': journalData.lunch_carbs,
+            'lunch_fiber': journalData.lunch_fiber,
+            'lunch_fat': journalData.lunch_fat,
+            'dinner_calories': journalData.dinner_calories,
+            'dinner_protein': journalData.dinner_protein,
+            'dinner_carbs': journalData.dinner_carbs,
+            'dinner_fiber': journalData.dinner_fiber,
+            'dinner_fat': journalData.dinner_fat,
+            'snack_calories': journalData.snack_calories,
+            'snack_protein': journalData.snack_protein,
+            'snack_carbs': journalData.snack_carbs,
+            'snack_fiber': journalData.snack_fiber,
+            'snack_fat': journalData.snack_fat
         };
 
         Object.entries(fieldsToUpdate).forEach(([field, value]) => {
