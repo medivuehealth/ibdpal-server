@@ -66,8 +66,15 @@ async function createJournalEntry(journalData, res) {
     try {
         // First, get the user_id from the username (email)
         console.log('🔍 Looking up user with email:', journalData.username);
-        const userQuery = `SELECT user_id FROM users WHERE email = $1`;
-        const userResult = await db.query(userQuery, [journalData.username]);
+        
+        // Debug logging for breakfast_calories
+        console.log('🔍 breakfast_calories debug:');
+        console.log('  - Raw value:', journalData.breakfast_calories);
+        console.log('  - Type:', typeof journalData.breakfast_calories);
+        console.log('  - parseFloat result:', parseFloat(journalData.breakfast_calories));
+        console.log('  - Final result:', Math.round(parseFloat(journalData.breakfast_calories) || 0));
+        
+        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [journalData.username]);
         
         console.log('🔍 User lookup result:', userResult.rows);
         
@@ -278,6 +285,9 @@ async function updateJournalEntry(entryId, journalData, res) {
                     validDosage = '0';
                 }
                 updateValues.push(validDosage);
+            } else if (['calories', 'protein', 'carbs', 'fiber', 'breakfast_calories', 'breakfast_protein', 'breakfast_carbs', 'breakfast_fiber', 'breakfast_fat', 'lunch_calories', 'lunch_protein', 'lunch_carbs', 'lunch_fiber', 'lunch_fat', 'dinner_calories', 'dinner_protein', 'dinner_carbs', 'dinner_fiber', 'dinner_fat', 'snack_calories', 'snack_protein', 'snack_carbs', 'snack_fiber', 'snack_fat'].includes(field)) {
+                // Convert nutrition fields to integers
+                updateValues.push(Math.round(parseFloat(value) || 0));
             } else {
                 updateValues.push(value);
             }
@@ -447,6 +457,9 @@ router.put('/entries/:entryId', async (req, res) => {
                         validDosage = '0';
                     }
                     updateValues.push(validDosage);
+                } else if (['calories', 'protein', 'carbs', 'fiber', 'breakfast_calories', 'breakfast_protein', 'breakfast_carbs', 'breakfast_fiber', 'breakfast_fat', 'lunch_calories', 'lunch_protein', 'lunch_carbs', 'lunch_fiber', 'lunch_fat', 'dinner_calories', 'dinner_protein', 'dinner_carbs', 'dinner_fiber', 'dinner_fat', 'snack_calories', 'snack_protein', 'snack_carbs', 'snack_fiber', 'snack_fat'].includes(field)) {
+                    // Convert nutrition fields to integers
+                    updateValues.push(Math.round(parseFloat(value) || 0));
                 } else {
                     updateValues.push(value);
                 }
