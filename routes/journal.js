@@ -46,20 +46,22 @@ async function createJournalEntry(journalData, res) {
     // Insert journal entry with proper defaults for constraints
     const journalQuery = `
         INSERT INTO journal_entries (
-            user_id, entry_date, calories, protein, carbs, fiber,
+            entry_id, user_id, entry_date, calories, protein, carbs, fiber,
             has_allergens, meals_per_day, hydration_level, bowel_frequency,
             bristol_scale, urgency_level, blood_present, pain_location,
             pain_severity, pain_time, medication_taken, medication_type,
-            dosage_level, sleep_hours, stress_level, menstruation,
-            fatigue_level, notes, breakfast, lunch, dinner, snacks,
-            breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
+            dosage_level, sleep_hours, stress_level, fatigue_level, notes,
+            created_at, menstruation, breakfast, lunch, dinner, snacks,
+            updated_at, breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
             lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
             dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
             snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-                $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
+        VALUES (
+            DEFAULT, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+            $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, DEFAULT, $25, $26, $27, $28, $29,
+            DEFAULT, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49
+        )
         RETURNING entry_id;
     `;
 
@@ -105,9 +107,9 @@ async function createJournalEntry(journalData, res) {
         })(),
         journalData.sleep_hours || 0,
         journalData.stress_level || 0,
-        journalData.menstruation || 'not_applicable',
         journalData.fatigue_level || 0,
         journalData.notes || '',
+        journalData.menstruation || 'not_applicable',
         journalData.breakfast || '',
         journalData.lunch || '',
         journalData.dinner || '',
