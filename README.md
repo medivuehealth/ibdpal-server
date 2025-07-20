@@ -59,4 +59,4 @@ The following environment variables need to be set in Railway:
 
 ## Database Setup
 
-The server automatically creates the necessary database tables and functions on startup. 
+The server automatically creates the necessary database tables and functions on startup. # Updated Sun Jul 20 15:32:35 EDT 2025
