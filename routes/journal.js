@@ -125,24 +125,24 @@ async function createJournalEntry(journalData, res) {
             Math.round(parseFloat(journalData.protein) || 0),  // $4 - protein
             Math.round(parseFloat(journalData.carbs) || 0),    // $5 - carbs
             Math.round(parseFloat(journalData.fiber) || 0),    // $6 - fiber
-            false,                     // $7 - has_allergens (boolean)
-            4,                         // $8 - meals_per_day (integer)
-            0,                         // $9 - hydration_level (integer)
-            0,                         // $10 - bowel_frequency (integer)
-            0,                         // $11 - bristol_scale (integer, not boolean)
-            0,                         // $12 - urgency_level (integer, not string)
-            0,                         // $13 - blood_present (integer)
-            0,                         // $14 - pain_location (integer, not string)
-            0,                         // $15 - pain_severity (integer, not boolean)
-            0,                         // $16 - pain_time (integer, not string)
-            0,                         // $17 - medication_taken (integer)
-            '',                        // $18 - medication_type (string)
-            'not_applicable',          // $19 - dosage_level (string)
-            0,                         // $20 - sleep_hours (integer)
-            '',                        // $21 - sleep_quality (string)
-            '',                        // $22 - stress_level (string)
+            false,                     // $7 - has_allergens
+            4,                         // $8 - meals_per_day
+            5,                         // $9 - hydration_level
+            0,                         // $10 - bowel_frequency
+            4,                         // $11 - bristol_scale
+            0,                         // $12 - urgency_level
+            false,                     // $13 - blood_present
+            'None',                    // $14 - pain_location
+            0,                         // $15 - pain_severity
+            'None',                    // $16 - pain_time
+            false,                     // $17 - medication_taken
+            'None',                    // $18 - medication_type
+            '0',                       // $19 - dosage_level
+            0,                         // $20 - sleep_hours
+            5,                         // $21 - stress_level
+            5,                         // $22 - fatigue_level
             '',                        // $23 - notes
-            false,                     // $24 - menstruation
+            'not_applicable',          // $24 - menstruation
             journalData.breakfast || '', // $25 - breakfast
             journalData.lunch || '',     // $26 - lunch
             journalData.dinner || '',    // $27 - dinner
