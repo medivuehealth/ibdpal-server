@@ -114,10 +114,10 @@ async function createJournalEntry(journalData, res) {
         const values = [
             userId,                    // $1 - user_id
             truncatedEntryDate,        // $2 - entry_date
-            Math.round(journalData.calories || 0), // $3 - calories
-            Math.round(journalData.protein || 0),  // $4 - protein
-            Math.round(journalData.carbs || 0),    // $5 - carbs
-            Math.round(journalData.fiber || 0),    // $6 - fiber
+            Math.round(parseFloat(journalData.calories) || 0), // $3 - calories
+            Math.round(parseFloat(journalData.protein) || 0),  // $4 - protein
+            Math.round(parseFloat(journalData.carbs) || 0),    // $5 - carbs
+            Math.round(parseFloat(journalData.fiber) || 0),    // $6 - fiber
             false,                     // $7 - has_allergens (boolean)
             4,                         // $8 - meals_per_day (integer)
             0,                         // $9 - hydration_level (integer)
@@ -132,34 +132,34 @@ async function createJournalEntry(journalData, res) {
             '',                        // $18 - medication_type (string)
             'not_applicable',          // $19 - dosage_level (string)
             0,                         // $20 - sleep_hours (integer)
-            0,                         // $21 - stress_level (integer)
-            0,                         // $22 - fatigue_level (integer)
-            '',                        // $23 - notes (string)
-            false,                     // $24 - menstruation (boolean)
+            '',                        // $21 - sleep_quality (string)
+            '',                        // $22 - stress_level (string)
+            '',                        // $23 - notes
+            false,                     // $24 - menstruation
             journalData.breakfast || '', // $25 - breakfast
             journalData.lunch || '',     // $26 - lunch
             journalData.dinner || '',    // $27 - dinner
             journalData.snacks || '',    // $28 - snacks
-            Math.round(journalData.breakfast_calories || 0), // $29 - breakfast_calories
-            Math.round(journalData.breakfast_protein || 0),  // $30 - breakfast_protein
-            Math.round(journalData.breakfast_carbs || 0),    // $31 - breakfast_carbs
-            Math.round(journalData.breakfast_fiber || 0),    // $32 - breakfast_fiber
-            Math.round(journalData.breakfast_fat || 0),      // $33 - breakfast_fat
-            Math.round(journalData.lunch_calories || 0),     // $34 - lunch_calories
-            Math.round(journalData.lunch_protein || 0),      // $35 - lunch_protein
-            Math.round(journalData.lunch_carbs || 0),        // $36 - lunch_carbs
-            Math.round(journalData.lunch_fiber || 0),        // $37 - lunch_fiber
-            Math.round(journalData.lunch_fat || 0),          // $38 - lunch_fat
-            Math.round(journalData.dinner_calories || 0),    // $39 - dinner_calories
-            Math.round(journalData.dinner_protein || 0),     // $40 - dinner_protein
-            Math.round(journalData.dinner_carbs || 0),       // $41 - dinner_carbs
-            Math.round(journalData.dinner_fiber || 0),       // $42 - dinner_fiber
-            Math.round(journalData.dinner_fat || 0),         // $43 - dinner_fat
-            Math.round(journalData.snack_calories || 0),     // $44 - snack_calories
-            Math.round(journalData.snack_protein || 0),      // $45 - snack_protein
-            Math.round(journalData.snack_carbs || 0),        // $46 - snack_carbs
-            Math.round(journalData.snack_fiber || 0),        // $47 - snack_fiber
-            Math.round(journalData.snack_fat || 0)           // $48 - snack_fat
+            Math.round(parseFloat(journalData.breakfast_calories) || 0), // $29 - breakfast_calories
+            Math.round(parseFloat(journalData.breakfast_protein) || 0),  // $30 - breakfast_protein
+            Math.round(parseFloat(journalData.breakfast_carbs) || 0),    // $31 - breakfast_carbs
+            Math.round(parseFloat(journalData.breakfast_fiber) || 0),    // $32 - breakfast_fiber
+            Math.round(parseFloat(journalData.breakfast_fat) || 0),      // $33 - breakfast_fat
+            Math.round(parseFloat(journalData.lunch_calories) || 0),     // $34 - lunch_calories
+            Math.round(parseFloat(journalData.lunch_protein) || 0),      // $35 - lunch_protein
+            Math.round(parseFloat(journalData.lunch_carbs) || 0),        // $36 - lunch_carbs
+            Math.round(parseFloat(journalData.lunch_fiber) || 0),        // $37 - lunch_fiber
+            Math.round(parseFloat(journalData.lunch_fat) || 0),          // $38 - lunch_fat
+            Math.round(parseFloat(journalData.dinner_calories) || 0),    // $39 - dinner_calories
+            Math.round(parseFloat(journalData.dinner_protein) || 0),     // $40 - dinner_protein
+            Math.round(parseFloat(journalData.dinner_carbs) || 0),       // $41 - dinner_carbs
+            Math.round(parseFloat(journalData.dinner_fiber) || 0),       // $42 - dinner_fiber
+            Math.round(parseFloat(journalData.dinner_fat) || 0),         // $43 - dinner_fat
+            Math.round(parseFloat(journalData.snack_calories) || 0),     // $44 - snack_calories
+            Math.round(parseFloat(journalData.snack_protein) || 0),      // $45 - snack_protein
+            Math.round(parseFloat(journalData.snack_carbs) || 0),        // $46 - snack_carbs
+            Math.round(parseFloat(journalData.snack_fiber) || 0),        // $47 - snack_fiber
+            Math.round(parseFloat(journalData.snack_fat) || 0)           // $48 - snack_fat
         ];
         
         console.log('🔍 Executing journal entry query with values:', values);
