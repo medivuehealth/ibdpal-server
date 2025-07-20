@@ -55,7 +55,7 @@ async function createJournalEntry(journalData, res) {
             breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
             lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
             dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
-            snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
+            snack_calories, snack_protein, snack_carbs, snack_fiber
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
