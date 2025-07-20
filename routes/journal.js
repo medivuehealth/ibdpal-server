@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
+// Test endpoint to check Railway API
+router.get('/test', (req, res) => {
+    console.log('🧪 Test endpoint called');
+    res.json({
+        message: 'Journal API is working',
+        timestamp: new Date().toISOString(),
+        server: 'IBDPal Server',
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
 // POST /api/journal/entries - Create a new journal entry
 router.post('/entries', async (req, res) => {
     try {
@@ -103,10 +114,10 @@ async function createJournalEntry(journalData, res) {
         const values = [
             userId,                    // $1 - user_id
             truncatedEntryDate,        // $2 - entry_date
-            0,                         // $3 - calories
-            0,                         // $4 - protein
-            0,                         // $5 - carbs
-            0,                         // $6 - fiber
+            journalData.calories || 0, // $3 - calories
+            journalData.protein || 0,  // $4 - protein
+            journalData.carbs || 0,    // $5 - carbs
+            journalData.fiber || 0,    // $6 - fiber
             false,                     // $7 - has_allergens
             4,                         // $8 - meals_per_day
             0,                         // $9 - hydration_level
@@ -124,30 +135,31 @@ async function createJournalEntry(journalData, res) {
             0,                         // $21 - stress_level
             0,                         // $22 - fatigue_level
             '',                        // $23 - notes
-            journalData.breakfast || '', // $24 - breakfast
-            journalData.lunch || '',     // $25 - lunch
-            journalData.dinner || '',    // $26 - dinner
-            journalData.snacks || '',    // $27 - snacks
-            journalData.breakfast_calories || 0, // $28 - breakfast_calories
-            0,                         // $29 - breakfast_protein
-            0,                         // $30 - breakfast_carbs
-            0,                         // $31 - breakfast_fiber
-            0,                         // $32 - breakfast_fat
-            0,                         // $33 - lunch_calories
-            0,                         // $34 - lunch_protein
-            0,                         // $35 - lunch_carbs
-            0,                         // $36 - lunch_fiber
-            0,                         // $37 - lunch_fat
-            0,                         // $38 - dinner_calories
-            0,                         // $39 - dinner_protein
-            0,                         // $40 - dinner_carbs
-            0,                         // $41 - dinner_fiber
-            0,                         // $42 - dinner_fat
-            0,                         // $43 - snack_calories
-            0,                         // $44 - snack_protein
-            0,                         // $45 - snack_carbs
-            0,                         // $46 - snack_fiber
-            0                          // $47 - snack_fat
+            false,                     // $24 - menstruation
+            journalData.breakfast || '', // $25 - breakfast
+            journalData.lunch || '',     // $26 - lunch
+            journalData.dinner || '',    // $27 - dinner
+            journalData.snacks || '',    // $28 - snacks
+            journalData.breakfast_calories || 0, // $29 - breakfast_calories
+            journalData.breakfast_protein || 0,  // $30 - breakfast_protein
+            journalData.breakfast_carbs || 0,    // $31 - breakfast_carbs
+            journalData.breakfast_fiber || 0,    // $32 - breakfast_fiber
+            journalData.breakfast_fat || 0,      // $33 - breakfast_fat
+            journalData.lunch_calories || 0,     // $34 - lunch_calories
+            journalData.lunch_protein || 0,      // $35 - lunch_protein
+            journalData.lunch_carbs || 0,        // $36 - lunch_carbs
+            journalData.lunch_fiber || 0,        // $37 - lunch_fiber
+            journalData.lunch_fat || 0,          // $38 - lunch_fat
+            journalData.dinner_calories || 0,    // $39 - dinner_calories
+            journalData.dinner_protein || 0,     // $40 - dinner_protein
+            journalData.dinner_carbs || 0,       // $41 - dinner_carbs
+            journalData.dinner_fiber || 0,       // $42 - dinner_fiber
+            journalData.dinner_fat || 0,         // $43 - dinner_fat
+            journalData.snack_calories || 0,     // $44 - snack_calories
+            journalData.snack_protein || 0,      // $45 - snack_protein
+            journalData.snack_carbs || 0,        // $46 - snack_carbs
+            journalData.snack_fiber || 0,        // $47 - snack_fiber
+            journalData.snack_fat || 0           // $48 - snack_fat
         ];
         
         console.log('🔍 Executing journal entry query with values:', values);
