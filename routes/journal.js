@@ -98,87 +98,71 @@ async function createJournalEntry(journalData, res) {
                     $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48)
             RETURNING entry_id;
         `;
-
-        const journalValues = [
-            userId,
-        truncatedEntryDate,
-        journalData.calories || 0,
-        journalData.protein || 0,
-        journalData.carbs || 0,
-        journalData.fiber || 0,
-        journalData.has_allergens || false,
-        journalData.meals_per_day || 0,
-        journalData.hydration_level || 0,
-        journalData.bowel_frequency || 0,
-        // Bristol scale must be 1-7, default to 4 if 0 or invalid
-        (journalData.bristol_scale && journalData.bristol_scale >= 1 && journalData.bristol_scale <= 7) ? journalData.bristol_scale : 4,
-        journalData.urgency_level || 0,
-        journalData.blood_present || false,
-        // Pain location must be one of the valid values, default to 'None' if empty/invalid
-        (journalData.pain_location && ['None', 'full_abdomen', 'lower_abdomen', 'upper_abdomen'].includes(journalData.pain_location)) ? journalData.pain_location : 'None',
-        journalData.pain_severity || 0,
-        // Pain time must be one of the valid values, default to 'None' if empty/invalid
-        (journalData.pain_time && ['None', 'morning', 'afternoon', 'evening', 'night', 'variable'].includes(journalData.pain_time)) ? journalData.pain_time : 'None',
-        journalData.medication_taken || false,
-        // Medication type must be one of the valid values, default to 'None' if empty/invalid
-        (journalData.medication_type && ['None', 'biologic', 'immunosuppressant', 'steroid'].includes(journalData.medication_type)) ? journalData.medication_type : 'None',
-        // Dosage level must be text and match medication type constraints
-        (() => {
-            let validDosage = '0'; // default for 'None' medication type
-            const medicationType = journalData.medication_type || 'None';
-            
-            if (medicationType === 'biologic') {
-                validDosage = (journalData.dosage_level && ['every_2_weeks', 'every_4_weeks', 'every_8_weeks'].includes(journalData.dosage_level)) ? journalData.dosage_level : 'every_4_weeks';
-            } else if (medicationType === 'immunosuppressant') {
-                validDosage = (journalData.dosage_level && ['daily', 'twice_daily', 'weekly'].includes(journalData.dosage_level)) ? journalData.dosage_level : 'daily';
-            } else if (medicationType === 'steroid') {
-                validDosage = (journalData.dosage_level && ['5', '10', '20'].includes(journalData.dosage_level)) ? journalData.dosage_level : '5';
-            } else {
-                // For 'None' or any other medication type, use '0'
-                validDosage = '0';
-            }
-            return validDosage;
-        })(),
-        journalData.sleep_hours || 0,
-        journalData.stress_level || 0,
-        journalData.fatigue_level || 0,
-        journalData.notes || '',
-        journalData.menstruation || 'not_applicable',
-        journalData.breakfast || '',
-        journalData.lunch || '',
-        journalData.dinner || '',
-        journalData.snacks || '',
-        // Individual meal nutrition
-        journalData.breakfast_calories || 0,
-        journalData.breakfast_protein || 0,
-        journalData.breakfast_carbs || 0,
-        journalData.breakfast_fiber || 0,
-        journalData.breakfast_fat || 0,
-        journalData.lunch_calories || 0,
-        journalData.lunch_protein || 0,
-        journalData.lunch_carbs || 0,
-        journalData.lunch_fiber || 0,
-        journalData.lunch_fat || 0,
-        journalData.dinner_calories || 0,
-        journalData.dinner_protein || 0,
-        journalData.dinner_carbs || 0,
-        journalData.dinner_fiber || 0,
-        journalData.dinner_fat || 0,
-        journalData.snack_calories || 0,
-        journalData.snack_protein || 0,
-        journalData.snack_carbs || 0,
-        journalData.snack_fiber || 0,
-        journalData.snack_fat || 0
-    ];
-
-    console.log('Executing journal entry query with values:', journalValues);
-    const journalResult = await db.query(journalQuery, journalValues);
-    const entryId = journalResult.rows[0].entry_id;
-
-    res.json({
-        message: 'Journal entry saved successfully',
-        entry_id: entryId
-    });
+        
+        // Prepare values with proper defaults
+        const values = [
+            userId,                    // $1 - user_id
+            truncatedEntryDate,        // $2 - entry_date
+            0,                         // $3 - calories
+            0,                         // $4 - protein
+            0,                         // $5 - carbs
+            0,                         // $6 - fiber
+            false,                     // $7 - has_allergens
+            4,                         // $8 - meals_per_day
+            0,                         // $9 - hydration_level
+            0,                         // $10 - bowel_frequency
+            false,                     // $11 - bristol_scale
+            'None',                    // $12 - urgency_level
+            0,                         // $13 - blood_present
+            'None',                    // $14 - pain_location
+            false,                     // $15 - pain_severity
+            'None',                    // $16 - pain_time
+            0,                         // $17 - medication_taken
+            '',                        // $18 - medication_type
+            'not_applicable',          // $19 - dosage_level
+            0,                         // $20 - sleep_hours
+            0,                         // $21 - stress_level
+            0,                         // $22 - fatigue_level
+            '',                        // $23 - notes
+            journalData.breakfast || '', // $24 - breakfast
+            journalData.lunch || '',     // $25 - lunch
+            journalData.dinner || '',    // $26 - dinner
+            journalData.snacks || '',    // $27 - snacks
+            journalData.breakfast_calories || 0, // $28 - breakfast_calories
+            0,                         // $29 - breakfast_protein
+            0,                         // $30 - breakfast_carbs
+            0,                         // $31 - breakfast_fiber
+            0,                         // $32 - breakfast_fat
+            0,                         // $33 - lunch_calories
+            0,                         // $34 - lunch_protein
+            0,                         // $35 - lunch_carbs
+            0,                         // $36 - lunch_fiber
+            0,                         // $37 - lunch_fat
+            0,                         // $38 - dinner_calories
+            0,                         // $39 - dinner_protein
+            0,                         // $40 - dinner_carbs
+            0,                         // $41 - dinner_fiber
+            0,                         // $42 - dinner_fat
+            0,                         // $43 - snack_calories
+            0,                         // $44 - snack_protein
+            0,                         // $45 - snack_carbs
+            0,                         // $46 - snack_fiber
+            0                          // $47 - snack_fat
+        ];
+        
+        console.log('🔍 Executing journal entry query with values:', values);
+        console.log('🔍 Query length:', journalQuery.length);
+        console.log('🔍 Values length:', values.length);
+        console.log('🔍 Expected parameters:', journalQuery.match(/\$/g)?.length || 0);
+        
+        const result = await db.query(journalQuery, values);
+        
+        console.log('✅ Journal entry created successfully with ID:', result.rows[0].entry_id);
+        
+        res.status(201).json({
+            message: 'Journal entry created successfully',
+            entry_id: result.rows[0].entry_id
+        });
     } catch (error) {
         console.error('Error creating journal entry:', error);
         res.status(500).json({
