@@ -118,24 +118,24 @@ async function createJournalEntry(journalData, res) {
             Math.round(journalData.protein || 0),  // $4 - protein
             Math.round(journalData.carbs || 0),    // $5 - carbs
             Math.round(journalData.fiber || 0),    // $6 - fiber
-            false,                     // $7 - has_allergens
-            4,                         // $8 - meals_per_day
-            0,                         // $9 - hydration_level
-            0,                         // $10 - bowel_frequency
-            false,                     // $11 - bristol_scale
-            'None',                    // $12 - urgency_level
-            0,                         // $13 - blood_present
-            'None',                    // $14 - pain_location
-            false,                     // $15 - pain_severity
-            'None',                    // $16 - pain_time
-            0,                         // $17 - medication_taken
-            '',                        // $18 - medication_type
-            'not_applicable',          // $19 - dosage_level
-            0,                         // $20 - sleep_hours
-            0,                         // $21 - stress_level
-            0,                         // $22 - fatigue_level
-            '',                        // $23 - notes
-            false,                     // $24 - menstruation
+            false,                     // $7 - has_allergens (boolean)
+            4,                         // $8 - meals_per_day (integer)
+            0,                         // $9 - hydration_level (integer)
+            0,                         // $10 - bowel_frequency (integer)
+            0,                         // $11 - bristol_scale (integer, not boolean)
+            'None',                    // $12 - urgency_level (string)
+            0,                         // $13 - blood_present (integer)
+            'None',                    // $14 - pain_location (string)
+            0,                         // $15 - pain_severity (integer, not boolean)
+            'None',                    // $16 - pain_time (string)
+            0,                         // $17 - medication_taken (integer)
+            '',                        // $18 - medication_type (string)
+            'not_applicable',          // $19 - dosage_level (string)
+            0,                         // $20 - sleep_hours (integer)
+            0,                         // $21 - stress_level (integer)
+            0,                         // $22 - fatigue_level (integer)
+            '',                        // $23 - notes (string)
+            false,                     // $24 - menstruation (boolean)
             journalData.breakfast || '', // $25 - breakfast
             journalData.lunch || '',     // $26 - lunch
             journalData.dinner || '',    // $27 - dinner
