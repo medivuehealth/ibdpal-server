@@ -18,10 +18,11 @@ router.post('/entries', async (req, res) => {
 
         // Check if an entry already exists for this user and date
         const existingEntryQuery = `
-            SELECT entry_id FROM journal_entries 
-            WHERE user_id = $1 AND entry_date = $2
+            SELECT je.entry_id FROM journal_entries je
+            JOIN users u ON je.user_id = u.user_id
+            WHERE u.email = $1 AND je.entry_date = $2
         `;
-        const existingResult = await db.query(existingEntryQuery, [journalData.user_id, journalData.entry_date]);
+        const existingResult = await db.query(existingEntryQuery, [journalData.username, journalData.entry_date]);
         
         if (existingResult.rows.length > 0) {
             // Update existing entry
@@ -43,28 +44,47 @@ router.post('/entries', async (req, res) => {
 
 // Helper function to create a new journal entry
 async function createJournalEntry(journalData, res) {
-    // Insert journal entry with proper defaults for constraints
-    const journalQuery = `
-        INSERT INTO journal_entries (
-            user_id, entry_date, calories, protein, carbs, fiber,
-            has_allergens, meals_per_day, hydration_level, bowel_frequency,
-            bristol_scale, urgency_level, blood_present, pain_location,
-            pain_severity, pain_time, medication_taken, medication_type,
-            dosage_level, sleep_hours, stress_level, fatigue_level, notes,
-            menstruation, breakfast, lunch, dinner, snacks,
-            breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
-            lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
-            dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
-            snack_calories, snack_protein, snack_carbs, snack_fiber
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-                $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
-        RETURNING entry_id;
-    `;
+    try {
+        // First, get the user_id from the username (email)
+        console.log('🔍 Looking up user with email:', journalData.username);
+        const userQuery = `SELECT user_id FROM users WHERE email = $1`;
+        const userResult = await db.query(userQuery, [journalData.username]);
+        
+        console.log('🔍 User lookup result:', userResult.rows);
+        
+        if (userResult.rows.length === 0) {
+            console.log('❌ User not found with email:', journalData.username);
+            return res.status(404).json({
+                error: 'User not found',
+                message: 'User with this email address not found'
+            });
+        }
+        
+        const userId = userResult.rows[0].user_id;
+        console.log('✅ Found user_id:', userId);
+        
+        // Insert journal entry with proper defaults for constraints
+        const journalQuery = `
+            INSERT INTO journal_entries (
+                user_id, entry_date, calories, protein, carbs, fiber,
+                has_allergens, meals_per_day, hydration_level, bowel_frequency,
+                bristol_scale, urgency_level, blood_present, pain_location,
+                pain_severity, pain_time, medication_taken, medication_type,
+                dosage_level, sleep_hours, stress_level, fatigue_level, notes,
+                menstruation, breakfast, lunch, dinner, snacks,
+                breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
+                lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
+                dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
+                snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
+                    $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48)
+            RETURNING entry_id;
+        `;
 
-    const journalValues = [
-        journalData.user_id,
+        const journalValues = [
+            userId,
         journalData.entry_date,
         journalData.calories || 0,
         journalData.protein || 0,
@@ -131,7 +151,8 @@ async function createJournalEntry(journalData, res) {
         journalData.snack_calories || 0,
         journalData.snack_protein || 0,
         journalData.snack_carbs || 0,
-        journalData.snack_fiber || 0
+        journalData.snack_fiber || 0,
+        journalData.snack_fat || 0
     ];
 
     console.log('Executing journal entry query with values:', journalValues);
@@ -142,6 +163,13 @@ async function createJournalEntry(journalData, res) {
         message: 'Journal entry saved successfully',
         entry_id: entryId
     });
+    } catch (error) {
+        console.error('Error creating journal entry:', error);
+        res.status(500).json({
+            error: 'Failed to create journal entry',
+            details: error.message
+        });
+    }
 }
 
 // Helper function to update an existing journal entry
@@ -280,19 +308,20 @@ async function updateJournalEntry(entryId, journalData, res) {
     });
 }
 
-// GET /api/journal/entries/:userId - Get all journal entries for a user
-router.get('/entries/:userId', async (req, res) => {
+// GET /api/journal/entries/:username - Get all journal entries for a user
+router.get('/entries/:username', async (req, res) => {
     try {
-        const { userId } = req.params;
+        const { username } = req.params;
         
-        // Get journal entries
+        // Get journal entries by joining with users table
         const query = `
-            SELECT * FROM journal_entries 
-            WHERE user_id = $1 
-            ORDER BY entry_date DESC, created_at DESC
+            SELECT je.* FROM journal_entries je
+            JOIN users u ON je.user_id = u.user_id
+            WHERE u.email = $1 
+            ORDER BY je.entry_date DESC, je.created_at DESC
         `;
         
-        const result = await db.query(query, [userId]);
+        const result = await db.query(query, [username]);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching journal entries:', error);
@@ -423,14 +452,16 @@ router.put('/entries/:entryId', async (req, res) => {
         // Add updated_at timestamp
         updateFields.push(`updated_at = NOW()`);
         
-        // Add entry_id and user_id for WHERE clause
+        // Add entry_id and username for WHERE clause
         updateValues.push(entryId);
-        updateValues.push(journalData.user_id);
+        updateValues.push(journalData.username);
 
         const updateQuery = `
             UPDATE journal_entries SET
                 ${updateFields.join(', ')}
-            WHERE entry_id = $${paramCount} AND user_id = $${paramCount + 1}
+            WHERE entry_id = $${paramCount} AND user_id = (
+                SELECT user_id FROM users WHERE email = $${paramCount + 1}
+            )
             RETURNING entry_id;
         `;
 

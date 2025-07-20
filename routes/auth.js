@@ -309,7 +309,7 @@ router.post('/login', validateLogin, formatValidationErrors, async (req, res) =>
     res.json({
       message: 'Login successful',
       user: {
-        id: user.user_id,
+        username: user.email, // Use email as username
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
