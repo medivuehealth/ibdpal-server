@@ -16,13 +16,21 @@ router.post('/entries', async (req, res) => {
             rawData: JSON.stringify(journalData)
         });
 
+        // Ensure entry_date is truncated to just the date part (YYYY-MM-DD)
+        const truncatedEntryDate = journalData.entry_date ? 
+            new Date(journalData.entry_date).toISOString().split('T')[0] : 
+            new Date().toISOString().split('T')[0];
+        
+        console.log('📅 Original entry_date:', journalData.entry_date);
+        console.log('📅 Truncated entry_date:', truncatedEntryDate);
+
         // Check if an entry already exists for this user and date
         const existingEntryQuery = `
             SELECT je.entry_id FROM journal_entries je
             JOIN users u ON je.user_id = u.user_id
-            WHERE u.email = $1 AND je.entry_date = $2
+            WHERE u.email = $1 AND DATE(je.entry_date) = $2
         `;
-        const existingResult = await db.query(existingEntryQuery, [journalData.username, journalData.entry_date]);
+        const existingResult = await db.query(existingEntryQuery, [journalData.username, truncatedEntryDate]);
         
         if (existingResult.rows.length > 0) {
             // Update existing entry
@@ -63,6 +71,14 @@ async function createJournalEntry(journalData, res) {
         const userId = userResult.rows[0].user_id;
         console.log('✅ Found user_id:', userId);
         
+        // Ensure entry_date is truncated to just the date part (YYYY-MM-DD)
+        const truncatedEntryDate = journalData.entry_date ? 
+            new Date(journalData.entry_date).toISOString().split('T')[0] : 
+            new Date().toISOString().split('T')[0];
+        
+        console.log('📅 Original entry_date:', journalData.entry_date);
+        console.log('📅 Truncated entry_date:', truncatedEntryDate);
+        
         // Insert journal entry with proper defaults for constraints
         const journalQuery = `
             INSERT INTO journal_entries (
@@ -85,7 +101,7 @@ async function createJournalEntry(journalData, res) {
 
         const journalValues = [
             userId,
-        journalData.entry_date,
+        truncatedEntryDate,
         journalData.calories || 0,
         journalData.protein || 0,
         journalData.carbs || 0,
@@ -491,10 +507,16 @@ router.put('/entries/:entryId', async (req, res) => {
 // GET /api/flare-statistics - Get flare prediction statistics
 router.get('/flare-statistics', async (req, res) => {
     try {
-        const { user_id, days = 30 } = req.query;
+        const { username, days = 30 } = req.query;
         
-        if (!user_id) {
-            return res.status(400).json({ error: 'user_id is required' });
+        if (!username) {
+            return res.status(400).json({ error: 'username is required' });
+        }
+
+        // Look up user_id from username
+        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [username]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
         }
 
         // For now, return mock data since we don't have flare predictions set up
@@ -516,10 +538,16 @@ router.get('/flare-statistics', async (req, res) => {
 // GET /api/recent-predictions - Get recent flare predictions
 router.get('/recent-predictions', async (req, res) => {
     try {
-        const { user_id, limit = 30 } = req.query;
+        const { username, limit = 30 } = req.query;
         
-        if (!user_id) {
-            return res.status(400).json({ error: 'user_id is required' });
+        if (!username) {
+            return res.status(400).json({ error: 'username is required' });
+        }
+
+        // Look up user_id from username
+        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [username]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
         }
 
         // For now, return mock data since we don't have flare predictions set up
@@ -538,10 +566,16 @@ router.get('/recent-predictions', async (req, res) => {
 // GET /api/meal_logs - Get meal logs
 router.get('/meal_logs', async (req, res) => {
     try {
-        const { user_id, days = 30 } = req.query;
+        const { username, days = 30 } = req.query;
         
-        if (!user_id) {
-            return res.status(400).json({ error: 'user_id is required' });
+        if (!username) {
+            return res.status(400).json({ error: 'username is required' });
+        }
+
+        // Look up user_id from username
+        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [username]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
         }
 
         // For now, return mock data since we don't have meal logs set up
