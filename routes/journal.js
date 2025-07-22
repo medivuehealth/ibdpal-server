@@ -628,6 +628,18 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
         
         console.log('🔍 [Nutrition Analysis] User ID:', userId);
         
+        // Check if userId is an email or UUID and look up the actual user_id
+        let actualUserId = userId;
+        if (userId.includes('@')) {
+            // It's an email, look up the user_id
+            const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [userId]);
+            if (userResult.rows.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            actualUserId = userResult.rows[0].user_id;
+            console.log('🔍 [Nutrition Analysis] Found user_id for email:', actualUserId);
+        }
+        
         // First, let's see what entries exist for this user
         const checkQuery = `
             SELECT entry_id, entry_date, breakfast_calories, lunch_calories, dinner_calories, snack_calories,
@@ -639,7 +651,7 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
             LIMIT 10
         `;
         
-        const checkResult = await db.query(checkQuery, [userId]);
+        const checkResult = await db.query(checkQuery, [actualUserId]);
         console.log('🔍 [Nutrition Analysis] Found entries:', checkResult.rows);
         
         // Get user's nutrition data from the last 7 days for Home screen
@@ -676,7 +688,7 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
             )
         `;
         
-        const result = await db.query(query, [userId, sevenDaysAgoStr]);
+        const result = await db.query(query, [actualUserId, sevenDaysAgoStr]);
         
         console.log('🔍 [Nutrition Analysis] Query result:', result.rows);
         
