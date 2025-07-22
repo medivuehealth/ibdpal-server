@@ -621,36 +621,74 @@ router.get('/meal_logs', async (req, res) => {
     }
 });
 
-// GET /api/nutrition/analysis/:userId - Get nutrition analysis based on user's log data
+// GET /api/journal/nutrition/analysis/:userId - Get nutrition analysis based on user's log data
 router.get('/nutrition/analysis/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Get user's nutrition data from the last 3 months
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        console.log('🔍 [Nutrition Analysis] User ID:', userId);
+        
+        // First, let's see what entries exist for this user
+        const checkQuery = `
+            SELECT entry_id, entry_date, breakfast_calories, lunch_calories, dinner_calories, snack_calories,
+                   breakfast_protein, lunch_protein, dinner_protein, snack_protein,
+                   breakfast_fiber, lunch_fiber, dinner_fiber, snack_fiber
+            FROM journal_entries 
+            WHERE user_id = $1
+            ORDER BY entry_date DESC
+            LIMIT 10
+        `;
+        
+        const checkResult = await db.query(checkQuery, [userId]);
+        console.log('🔍 [Nutrition Analysis] Found entries:', checkResult.rows);
+        
+        // Get user's nutrition data from the last 7 days for Home screen
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+        
+        console.log('🔍 [Nutrition Analysis] Looking for entries since:', sevenDaysAgoStr);
         
         const query = `
             SELECT 
-                AVG(calories) as avg_calories,
-                AVG(protein) as avg_protein,
-                AVG(carbs) as avg_carbs,
-                AVG(fiber) as avg_fiber,
-                AVG(breakfast_calories + lunch_calories + dinner_calories + snack_calories) as total_calories,
-                AVG(breakfast_protein + lunch_protein + dinner_protein + snack_protein) as total_protein,
-                AVG(breakfast_carbs + lunch_carbs + dinner_carbs + snack_carbs) as total_carbs,
-                AVG(breakfast_fiber + lunch_fiber + dinner_fiber + snack_fiber) as total_fiber,
-                AVG(breakfast_fat + lunch_fat + dinner_fat + snack_fat) as total_fat
+                ROUND(AVG(COALESCE(breakfast_calories, 0) + COALESCE(lunch_calories, 0) + COALESCE(dinner_calories, 0) + COALESCE(snack_calories, 0)), 1) as avg_calories,
+                ROUND(AVG(COALESCE(breakfast_protein, 0) + COALESCE(lunch_protein, 0) + COALESCE(dinner_protein, 0) + COALESCE(snack_protein, 0)), 1) as avg_protein,
+                ROUND(AVG(COALESCE(breakfast_carbs, 0) + COALESCE(lunch_carbs, 0) + COALESCE(dinner_carbs, 0) + COALESCE(snack_carbs, 0)), 1) as avg_carbs,
+                ROUND(AVG(COALESCE(breakfast_fiber, 0) + COALESCE(lunch_fiber, 0) + COALESCE(dinner_fiber, 0) + COALESCE(snack_fiber, 0)), 1) as avg_fiber,
+                ROUND(AVG(COALESCE(breakfast_fat, 0) + COALESCE(lunch_fat, 0) + COALESCE(dinner_fat, 0) + COALESCE(snack_fat, 0)), 1) as avg_fat,
+                COUNT(*) as days_with_meals
             FROM journal_entries 
             WHERE user_id = $1 
             AND entry_date >= $2
-            AND (calories > 0 OR protein > 0 OR carbs > 0)
+            AND (
+                COALESCE(breakfast_calories, 0) > 0 OR 
+                COALESCE(lunch_calories, 0) > 0 OR 
+                COALESCE(dinner_calories, 0) > 0 OR 
+                COALESCE(snack_calories, 0) > 0 OR
+                COALESCE(breakfast_protein, 0) > 0 OR 
+                COALESCE(lunch_protein, 0) > 0 OR 
+                COALESCE(dinner_protein, 0) > 0 OR 
+                COALESCE(snack_protein, 0) > 0 OR
+                breakfast IS NOT NULL AND breakfast != '' OR
+                lunch IS NOT NULL AND lunch != '' OR
+                dinner IS NOT NULL AND dinner != '' OR
+                snacks IS NOT NULL AND snacks != ''
+            )
         `;
         
-        const result = await db.query(query, [userId, threeMonthsAgo.toISOString().split('T')[0]]);
+        const result = await db.query(query, [userId, sevenDaysAgoStr]);
         
-        if (result.rows.length === 0) {
+        console.log('🔍 [Nutrition Analysis] Query result:', result.rows);
+        
+        if (result.rows.length === 0 || result.rows[0].days_with_meals === 0) {
+            console.log('🔍 [Nutrition Analysis] No meal data found, returning default response');
             return res.json({
+                avg_calories: 0,
+                avg_protein: 0,
+                avg_carbs: 0,
+                avg_fiber: 0,
+                avg_fat: 0,
+                days_with_meals: 0,
                 deficiencies: [],
                 recommendations: ["Start logging your meals to get personalized nutrition analysis"],
                 overall_score: 0,
@@ -659,11 +697,12 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
         }
         
         const data = result.rows[0];
+        console.log('🔍 [Nutrition Analysis] Processed data:', data);
         
         // IBD-specific nutrition benchmarks based on research
         const benchmarks = {
             calories: { recommended: 2000, unit: "kcal" },
-            protein: { recommended: 1.2, unit: "g/kg" }, // Higher protein for IBD patients
+            protein: { recommended: 84, unit: "g" }, // 1.2g/kg for 70kg person
             carbs: { recommended: 250, unit: "g" },
             fiber: { recommended: 25, unit: "g" }, // Lower fiber for IBD patients
             fat: { recommended: 65, unit: "g" }
@@ -676,8 +715,8 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
         // Protein analysis (critical for IBD)
         const proteinDeficiency = calculateDeficiency(
             "Protein", 
-            data.total_protein || 0, 
-            benchmarks.protein.recommended * 70, // Assuming 70kg average weight
+            data.avg_protein || 0, 
+            benchmarks.protein.recommended,
             "Protein is crucial for tissue repair and immune function in IBD patients"
         );
         if (proteinDeficiency) {
@@ -688,9 +727,9 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
         // Fiber analysis (lower tolerance in IBD)
         const fiberDeficiency = calculateDeficiency(
             "Fiber", 
-            data.total_fiber || 0, 
+            data.avg_fiber || 0, 
             benchmarks.fiber.recommended,
-            "Fiber should be limited during flares but important for gut health"
+            "Fiber should be introduced gradually in IBD patients"
         );
         if (fiberDeficiency) {
             deficiencies.push(fiberDeficiency);
@@ -698,31 +737,41 @@ router.get('/nutrition/analysis/:userId', async (req, res) => {
         }
         
         // Calories analysis
-        const calorieDeficiency = calculateDeficiency(
+        const caloriesDeficiency = calculateDeficiency(
             "Calories", 
-            data.total_calories || 0, 
+            data.avg_calories || 0, 
             benchmarks.calories.recommended,
-            "Adequate calories are essential for maintaining weight and energy"
+            "Adequate calories are essential for maintaining weight and energy in IBD"
         );
-        if (calorieDeficiency) {
-            deficiencies.push(calorieDeficiency);
+        if (caloriesDeficiency) {
+            deficiencies.push(caloriesDeficiency);
             overallScore -= 15;
         }
         
         // Generate recommendations
         const recommendations = generateNutritionRecommendations(deficiencies, data);
         
-        res.json({
+        const response = {
+            avg_calories: data.avg_calories || 0,
+            avg_protein: data.avg_protein || 0,
+            avg_carbs: data.avg_carbs || 0,
+            avg_fiber: data.avg_fiber || 0,
+            avg_fat: data.avg_fat || 0,
+            days_with_meals: data.days_with_meals || 0,
             deficiencies: deficiencies,
             recommendations: recommendations,
-            overall_score: max(0, overallScore),
+            overall_score: Math.max(0, overallScore),
             last_updated: new Date().toISOString()
-        });
+        };
+        
+        console.log('🔍 [Nutrition Analysis] Final response:', response);
+        
+        res.json(response);
         
     } catch (error) {
-        console.error('Error analyzing nutrition:', error);
+        console.error('Error calculating nutrition analysis:', error);
         res.status(500).json({ 
-            error: 'Failed to analyze nutrition',
+            error: 'Failed to calculate nutrition analysis',
             details: error.message 
         });
     }
