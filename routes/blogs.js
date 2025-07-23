@@ -1,13 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
 const { Pool } = require('pg');
+require('dotenv').config();
 
 // Database connection
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Middleware to verify user authentication
+const authenticateUser = async (req, res, next) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ error: 'No token provided' });
+    }
+    
+    try {
+        const result = await pool.query(
+            'SELECT id, username FROM users WHERE token = $1',
+            [token]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+        
+        req.user = result.rows[0];
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+};
 
 // GET /api/blogs/stories - Get all published stories with filters
 router.get('/stories', async (req, res) => {
@@ -175,7 +201,7 @@ router.get('/stories/:id', async (req, res) => {
 });
 
 // POST /api/blogs/stories - Create a new story
-router.post('/stories', auth, async (req, res) => {
+router.post('/stories', authenticateUser, async (req, res) => {
     try {
         const {
             title,
@@ -256,7 +282,7 @@ router.post('/stories', auth, async (req, res) => {
 });
 
 // PUT /api/blogs/stories/:id - Update a story
-router.put('/stories/:id', auth, async (req, res) => {
+router.put('/stories/:id', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const {
@@ -314,7 +340,7 @@ router.put('/stories/:id', auth, async (req, res) => {
 });
 
 // DELETE /api/blogs/stories/:id - Delete a story
-router.delete('/stories/:id', auth, async (req, res) => {
+router.delete('/stories/:id', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
@@ -349,7 +375,7 @@ router.delete('/stories/:id', auth, async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/like - Like/unlike a story
-router.post('/stories/:id/like', auth, async (req, res) => {
+router.post('/stories/:id/like', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
@@ -398,7 +424,7 @@ router.post('/stories/:id/like', auth, async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/comments - Add a comment to a story
-router.post('/stories/:id/comments', auth, async (req, res) => {
+router.post('/stories/:id/comments', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const { content, isAnonymous = false } = req.body;
@@ -457,7 +483,7 @@ router.post('/stories/:id/comments', auth, async (req, res) => {
 });
 
 // POST /api/blogs/comments/:id/like - Like/unlike a comment
-router.post('/comments/:id/like', auth, async (req, res) => {
+router.post('/comments/:id/like', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
@@ -581,7 +607,7 @@ router.get('/stories/user/:userId', async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/report - Report a story
-router.post('/stories/:id/report', auth, async (req, res) => {
+router.post('/stories/:id/report', authenticateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const { reason, description } = req.body;
