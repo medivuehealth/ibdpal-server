@@ -1,39 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
-require('dotenv').config();
-
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Middleware to verify user authentication
-const authenticateUser = async (req, res, next) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-        return res.status(401).json({ error: 'No token provided' });
-    }
-    
-    try {
-        const result = await pool.query(
-            'SELECT id, username FROM users WHERE token = $1',
-            [token]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-        
-        req.user = result.rows[0];
-        next();
-    } catch (error) {
-        console.error('Authentication error:', error);
-        res.status(500).json({ error: 'Authentication failed' });
-    }
-};
+const db = require('../database/db');
+const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/blogs/stories - Get all published stories with filters
 router.get('/stories', async (req, res) => {
@@ -76,7 +44,7 @@ router.get('/stories', async (req, res) => {
                 break;
             case 'my_stories':
                 if (userId) {
-                    whereConditions.push(`user_id = $${paramIndex}`);
+                    whereConditions.push(`username = $${paramIndex}`);
                     params.push(userId);
                     paramIndex++;
                 }
@@ -89,9 +57,9 @@ router.get('/stories', async (req, res) => {
         const storiesQuery = `
             SELECT 
                 bs.*,
-                CASE WHEN bsl.user_id IS NOT NULL THEN true ELSE false END as is_liked
+                CASE WHEN bsl.username IS NOT NULL THEN true ELSE false END as is_liked
             FROM blog_stories bs
-            LEFT JOIN blog_story_likes bsl ON bs.id = bsl.story_id AND bsl.user_id = $${paramIndex}
+            LEFT JOIN blog_story_likes bsl ON bs.id = bsl.story_id AND bsl.username = $${paramIndex}
             WHERE ${whereClause}
             ORDER BY 
                 CASE WHEN $${paramIndex + 1} = 'popular' THEN bs.likes END DESC,
@@ -102,7 +70,7 @@ router.get('/stories', async (req, res) => {
 
         params.push(userId || null, filter, limit, offset);
 
-        const storiesResult = await pool.query(storiesQuery, params);
+        const storiesResult = await db.query(storiesQuery, params);
         const stories = storiesResult.rows;
 
         // Get total count for pagination
@@ -111,7 +79,7 @@ router.get('/stories', async (req, res) => {
             FROM blog_stories bs
             WHERE ${whereClause}
         `;
-        const countResult = await pool.query(countQuery, params.slice(0, -4));
+        const countResult = await db.query(countQuery, params.slice(0, -4));
         const total = parseInt(countResult.rows[0].total);
 
         res.json({
@@ -147,12 +115,12 @@ router.get('/stories/:id', async (req, res) => {
         const storyQuery = `
             SELECT 
                 bs.*,
-                CASE WHEN bsl.user_id IS NOT NULL THEN true ELSE false END as is_liked
+                CASE WHEN bsl.username IS NOT NULL THEN true ELSE false END as is_liked
             FROM blog_stories bs
-            LEFT JOIN blog_story_likes bsl ON bs.id = bsl.story_id AND bsl.user_id = $1
+            LEFT JOIN blog_story_likes bsl ON bs.id = bsl.story_id AND bsl.username = $1
             WHERE bs.id = $2 AND bs.is_published = true
         `;
-        const storyResult = await pool.query(storyQuery, [userId || null, id]);
+        const storyResult = await db.query(storyQuery, [userId || null, id]);
 
         if (storyResult.rows.length === 0) {
             return res.status(404).json({
@@ -167,18 +135,18 @@ router.get('/stories/:id', async (req, res) => {
         const commentsQuery = `
             SELECT 
                 bc.*,
-                CASE WHEN bcl.user_id IS NOT NULL THEN true ELSE false END as is_liked
+                CASE WHEN bcl.username IS NOT NULL THEN true ELSE false END as is_liked
             FROM blog_comments bc
-            LEFT JOIN blog_comment_likes bcl ON bc.id = bcl.comment_id AND bcl.user_id = $1
+            LEFT JOIN blog_comment_likes bcl ON bc.id = bcl.comment_id AND bcl.username = $1
             WHERE bc.story_id = $2
             ORDER BY bc.created_at ASC
         `;
-        const commentsResult = await pool.query(commentsQuery, [userId || null, id]);
+        const commentsResult = await db.query(commentsQuery, [userId || null, id]);
         const comments = commentsResult.rows;
 
         // Record view
-        await pool.query(
-            'INSERT INTO blog_story_views (story_id, user_id, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
+        await db.query(
+            'INSERT INTO blog_story_views (story_id, username, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
             [id, userId || null, req.ip, req.get('User-Agent')]
         );
 
@@ -201,7 +169,7 @@ router.get('/stories/:id', async (req, res) => {
 });
 
 // POST /api/blogs/stories - Create a new story
-router.post('/stories', authenticateUser, async (req, res) => {
+router.post('/stories', authenticateToken, async (req, res) => {
     try {
         const {
             title,
@@ -211,7 +179,7 @@ router.post('/stories', authenticateUser, async (req, res) => {
             isAnonymous = false
         } = req.body;
 
-        const userId = req.user.id;
+        const username = req.user.email;
 
         // Validate required fields
         if (!title || !content || !diseaseType) {
@@ -232,7 +200,7 @@ router.post('/stories', authenticateUser, async (req, res) => {
 
         // Get user info
         const userQuery = 'SELECT name, age FROM users WHERE id = $1';
-        const userResult = await pool.query(userQuery, [userId]);
+        const userResult = await db.query(userQuery, [userId]);
         
         if (userResult.rows.length === 0) {
             return res.status(404).json({
@@ -246,13 +214,13 @@ router.post('/stories', authenticateUser, async (req, res) => {
         // Create story
         const storyQuery = `
             INSERT INTO blog_stories (
-                user_id, user_name, user_age, disease_type, title, content, 
+                username, user_name, user_age, disease_type, title, content, 
                 tags, is_anonymous, is_published
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
             RETURNING *
         `;
         
-        const storyResult = await pool.query(storyQuery, [
+        const storyResult = await db.query(storyQuery, [
             userId,
             isAnonymous ? 'Anonymous' : user.name,
             user.age,
@@ -282,7 +250,7 @@ router.post('/stories', authenticateUser, async (req, res) => {
 });
 
 // PUT /api/blogs/stories/:id - Update a story
-router.put('/stories/:id', authenticateUser, async (req, res) => {
+router.put('/stories/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const {
@@ -293,11 +261,11 @@ router.put('/stories/:id', authenticateUser, async (req, res) => {
             isAnonymous
         } = req.body;
 
-        const userId = req.user.id;
+        const username = req.user.email;
 
         // Check if story exists and belongs to user
-        const checkQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND user_id = $2';
-        const checkResult = await pool.query(checkQuery, [id, userId]);
+        const checkQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND username = $2';
+        const checkResult = await db.query(checkQuery, [id, userId]);
 
         if (checkResult.rows.length === 0) {
             return res.status(404).json({
@@ -315,11 +283,11 @@ router.put('/stories/:id', authenticateUser, async (req, res) => {
                 tags = COALESCE($4, tags),
                 is_anonymous = COALESCE($5, is_anonymous),
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6 AND user_id = $7
+            WHERE id = $6 AND username = $7
             RETURNING *
         `;
 
-        const updateResult = await pool.query(updateQuery, [
+        const updateResult = await db.query(updateQuery, [
             title, content, diseaseType, tags, isAnonymous, id, userId
         ]);
 
@@ -340,14 +308,14 @@ router.put('/stories/:id', authenticateUser, async (req, res) => {
 });
 
 // DELETE /api/blogs/stories/:id - Delete a story
-router.delete('/stories/:id', authenticateUser, async (req, res) => {
+router.delete('/stories/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        const username = req.user.email;
 
         // Check if story exists and belongs to user
-        const checkQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND user_id = $2';
-        const checkResult = await pool.query(checkQuery, [id, userId]);
+        const checkQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND username = $2';
+        const checkResult = await db.query(checkQuery, [id, userId]);
 
         if (checkResult.rows.length === 0) {
             return res.status(404).json({
@@ -357,7 +325,7 @@ router.delete('/stories/:id', authenticateUser, async (req, res) => {
         }
 
         // Delete story (cascade will handle related records)
-        await pool.query('DELETE FROM blog_stories WHERE id = $1', [id]);
+        await db.query('DELETE FROM blog_stories WHERE id = $1', [id]);
 
         res.json({
             success: true,
@@ -375,14 +343,14 @@ router.delete('/stories/:id', authenticateUser, async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/like - Like/unlike a story
-router.post('/stories/:id/like', authenticateUser, async (req, res) => {
+router.post('/stories/:id/like', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        const username = req.user.email;
 
         // Check if story exists
         const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND is_published = true';
-        const storyResult = await pool.query(storyQuery, [id]);
+        const storyResult = await db.query(storyQuery, [id]);
 
         if (storyResult.rows.length === 0) {
             return res.status(404).json({
@@ -392,12 +360,12 @@ router.post('/stories/:id/like', authenticateUser, async (req, res) => {
         }
 
         // Check if user already liked the story
-        const likeQuery = 'SELECT * FROM blog_story_likes WHERE story_id = $1 AND user_id = $2';
-        const likeResult = await pool.query(likeQuery, [id, userId]);
+        const likeQuery = 'SELECT * FROM blog_story_likes WHERE story_id = $1 AND username = $2';
+        const likeResult = await db.query(likeQuery, [id, userId]);
 
         if (likeResult.rows.length > 0) {
             // Unlike
-            await pool.query('DELETE FROM blog_story_likes WHERE story_id = $1 AND user_id = $2', [id, userId]);
+            await db.query('DELETE FROM blog_story_likes WHERE story_id = $1 AND username = $2', [id, userId]);
             res.json({
                 success: true,
                 message: 'Story unliked',
@@ -405,7 +373,7 @@ router.post('/stories/:id/like', authenticateUser, async (req, res) => {
             });
         } else {
             // Like
-            await pool.query('INSERT INTO blog_story_likes (story_id, user_id) VALUES ($1, $2)', [id, userId]);
+            await db.query('INSERT INTO blog_story_likes (story_id, username) VALUES ($1, $2)', [id, userId]);
             res.json({
                 success: true,
                 message: 'Story liked',
@@ -424,11 +392,11 @@ router.post('/stories/:id/like', authenticateUser, async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/comments - Add a comment to a story
-router.post('/stories/:id/comments', authenticateUser, async (req, res) => {
+router.post('/stories/:id/comments', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { content, isAnonymous = false } = req.body;
-        const userId = req.user.id;
+        const username = req.user.email;
 
         if (!content) {
             return res.status(400).json({
@@ -439,7 +407,7 @@ router.post('/stories/:id/comments', authenticateUser, async (req, res) => {
 
         // Check if story exists
         const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND is_published = true';
-        const storyResult = await pool.query(storyQuery, [id]);
+        const storyResult = await db.query(storyQuery, [id]);
 
         if (storyResult.rows.length === 0) {
             return res.status(404).json({
@@ -450,17 +418,17 @@ router.post('/stories/:id/comments', authenticateUser, async (req, res) => {
 
         // Get user info
         const userQuery = 'SELECT name FROM users WHERE id = $1';
-        const userResult = await pool.query(userQuery, [userId]);
+        const userResult = await db.query(userQuery, [userId]);
         const user = userResult.rows[0];
 
         // Create comment
         const commentQuery = `
-            INSERT INTO blog_comments (story_id, user_id, user_name, content, is_anonymous)
+            INSERT INTO blog_comments (story_id, username, user_name, content, is_anonymous)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *
         `;
 
-        const commentResult = await pool.query(commentQuery, [
+        const commentResult = await db.query(commentQuery, [
             id, userId, isAnonymous ? 'Anonymous' : user.name, content, isAnonymous
         ]);
 
@@ -483,14 +451,14 @@ router.post('/stories/:id/comments', authenticateUser, async (req, res) => {
 });
 
 // POST /api/blogs/comments/:id/like - Like/unlike a comment
-router.post('/comments/:id/like', authenticateUser, async (req, res) => {
+router.post('/comments/:id/like', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        const username = req.user.email;
 
         // Check if comment exists
         const commentQuery = 'SELECT * FROM blog_comments WHERE id = $1';
-        const commentResult = await pool.query(commentQuery, [id]);
+        const commentResult = await db.query(commentQuery, [id]);
 
         if (commentResult.rows.length === 0) {
             return res.status(404).json({
@@ -500,12 +468,12 @@ router.post('/comments/:id/like', authenticateUser, async (req, res) => {
         }
 
         // Check if user already liked the comment
-        const likeQuery = 'SELECT * FROM blog_comment_likes WHERE comment_id = $1 AND user_id = $2';
-        const likeResult = await pool.query(likeQuery, [id, userId]);
+        const likeQuery = 'SELECT * FROM blog_comment_likes WHERE comment_id = $1 AND username = $2';
+        const likeResult = await db.query(likeQuery, [id, userId]);
 
         if (likeResult.rows.length > 0) {
             // Unlike
-            await pool.query('DELETE FROM blog_comment_likes WHERE comment_id = $1 AND user_id = $2', [id, userId]);
+            await db.query('DELETE FROM blog_comment_likes WHERE comment_id = $1 AND username = $2', [id, userId]);
             res.json({
                 success: true,
                 message: 'Comment unliked',
@@ -513,7 +481,7 @@ router.post('/comments/:id/like', authenticateUser, async (req, res) => {
             });
         } else {
             // Like
-            await pool.query('INSERT INTO blog_comment_likes (comment_id, user_id) VALUES ($1, $2)', [id, userId]);
+            await db.query('INSERT INTO blog_comment_likes (comment_id, username) VALUES ($1, $2)', [id, userId]);
             res.json({
                 success: true,
                 message: 'Comment liked',
@@ -541,7 +509,7 @@ router.get('/tags', async (req, res) => {
             LIMIT 20
         `;
         
-        const result = await pool.query(query);
+        const result = await db.query(query);
         
         res.json({
             success: true,
@@ -567,20 +535,20 @@ router.get('/stories/user/:userId', async (req, res) => {
 
         const query = `
             SELECT * FROM blog_stories 
-            WHERE user_id = $1 AND is_published = true
+            WHERE username = $1 AND is_published = true
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
         `;
 
-        const result = await pool.query(query, [userId, limit, offset]);
+        const result = await db.query(query, [userId, limit, offset]);
         
         // Get total count
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM blog_stories 
-            WHERE user_id = $1 AND is_published = true
+            WHERE username = $1 AND is_published = true
         `;
-        const countResult = await pool.query(countQuery, [userId]);
+        const countResult = await db.query(countQuery, [userId]);
         const total = parseInt(countResult.rows[0].total);
 
         res.json({
@@ -607,11 +575,11 @@ router.get('/stories/user/:userId', async (req, res) => {
 });
 
 // POST /api/blogs/stories/:id/report - Report a story
-router.post('/stories/:id/report', authenticateUser, async (req, res) => {
+router.post('/stories/:id/report', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { reason, description } = req.body;
-        const userId = req.user.id;
+        const username = req.user.email;
 
         if (!reason) {
             return res.status(400).json({
@@ -630,7 +598,7 @@ router.post('/stories/:id/report', authenticateUser, async (req, res) => {
 
         // Check if story exists
         const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1';
-        const storyResult = await pool.query(storyQuery, [id]);
+        const storyResult = await db.query(storyQuery, [id]);
 
         if (storyResult.rows.length === 0) {
             return res.status(404).json({
@@ -640,8 +608,8 @@ router.post('/stories/:id/report', authenticateUser, async (req, res) => {
         }
 
         // Check if user already reported this story
-        const existingReportQuery = 'SELECT * FROM blog_story_reports WHERE story_id = $1 AND reporter_user_id = $2';
-        const existingReportResult = await pool.query(existingReportQuery, [id, userId]);
+        const existingReportQuery = 'SELECT * FROM blog_story_reports WHERE story_id = $1 AND reporter_username = $2';
+        const existingReportResult = await db.query(existingReportQuery, [id, userId]);
 
         if (existingReportResult.rows.length > 0) {
             return res.status(400).json({
@@ -651,8 +619,8 @@ router.post('/stories/:id/report', authenticateUser, async (req, res) => {
         }
 
         // Create report
-        await pool.query(
-            'INSERT INTO blog_story_reports (story_id, reporter_user_id, reason, description) VALUES ($1, $2, $3, $4)',
+        await db.query(
+            'INSERT INTO blog_story_reports (story_id, reporter_username, reason, description) VALUES ($1, $2, $3, $4)',
             [id, userId, reason, description]
         );
 

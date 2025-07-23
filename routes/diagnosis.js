@@ -1,46 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
-require('dotenv').config();
-
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Middleware to verify user authentication
-const authenticateUser = async (req, res, next) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-        return res.status(401).json({ error: 'No token provided' });
-    }
-    
-    try {
-        const result = await pool.query(
-            'SELECT username FROM users WHERE token = $1',
-            [token]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-        
-        req.user = result.rows[0];
-        next();
-    } catch (error) {
-        console.error('Authentication error:', error);
-        res.status(500).json({ error: 'Authentication failed' });
-    }
-};
+const db = require('../database/db');
+const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/diagnosis - Get user's diagnosis information
-router.get('/', authenticateUser, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { username } = req.user;
+        const username = req.user.email; // JWT token contains email as username
         
-        const result = await pool.query(
+        const result = await db.query(
             'SELECT * FROM user_diagnosis WHERE username = $1 ORDER BY updated_at DESC LIMIT 1',
             [username]
         );
@@ -60,9 +28,9 @@ router.get('/', authenticateUser, async (req, res) => {
 });
 
 // POST /api/diagnosis - Save or update user's diagnosis information
-router.post('/', authenticateUser, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { username } = req.user;
+        const username = req.user.email; // JWT token contains email as username
         const {
             diagnosis,
             diagnosisYear,
@@ -92,7 +60,7 @@ router.post('/', authenticateUser, async (req, res) => {
         }
         
         // Check if user already has a diagnosis record
-        const existingResult = await pool.query(
+        const existingResult = await db.query(
             'SELECT id FROM user_diagnosis WHERE username = $1',
             [username]
         );
@@ -101,7 +69,7 @@ router.post('/', authenticateUser, async (req, res) => {
         
         if (existingResult.rows.length > 0) {
             // Update existing record
-            result = await pool.query(`
+            result = await db.query(`
                 UPDATE user_diagnosis SET
                     diagnosis = $1,
                     diagnosis_year = $2,
@@ -151,7 +119,7 @@ router.post('/', authenticateUser, async (req, res) => {
             ]);
         } else {
             // Insert new record
-            result = await pool.query(`
+            result = await db.query(`
                 INSERT INTO user_diagnosis (
                     username,
                     diagnosis,
@@ -213,11 +181,11 @@ router.post('/', authenticateUser, async (req, res) => {
 });
 
 // DELETE /api/diagnosis - Delete user's diagnosis information
-router.delete('/', authenticateUser, async (req, res) => {
+router.delete('/', authenticateToken, async (req, res) => {
     try {
-        const { username } = req.user;
+        const username = req.user.email; // JWT token contains email as username
         
-        const result = await pool.query(
+        const result = await db.query(
             'DELETE FROM user_diagnosis WHERE username = $1 RETURNING id',
             [username]
         );
@@ -237,11 +205,11 @@ router.delete('/', authenticateUser, async (req, res) => {
 });
 
 // GET /api/diagnosis/history - Get diagnosis history for user
-router.get('/history', authenticateUser, async (req, res) => {
+router.get('/history', authenticateToken, async (req, res) => {
     try {
-        const { username } = req.user;
+        const username = req.user.email; // JWT token contains email as username
         
-        const result = await pool.query(
+        const result = await db.query(
             'SELECT * FROM user_diagnosis WHERE username = $1 ORDER BY updated_at DESC',
             [username]
         );
