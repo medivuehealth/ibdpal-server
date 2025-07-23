@@ -1,255 +1,258 @@
 const express = require('express');
+const router = express.Router();
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const router = express.Router();
-
-// Create a new pool using the Neon database connection
+// Database connection
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_ILP7Oz0VhYKj@ep-lucky-wildflower-ae5uww1l-pooler.c-2.us-east-2.aws.neon.tech/medivue?sslmode=require&channel_binding=require',
-    ssl: {
-        rejectUnauthorized: false
-    }
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// POST /api/users/:user_id/diagnosis - Save diagnosis information
-router.post('/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-    const {
-        diagnosis,
-        diagnosisYear,
-        diagnosisMonth,
-        diseaseLocation,
-        diseaseBehavior,
-        diseaseSeverity,
-        takingMedications,
-        currentMedications,
-        medicationComplications,
-        isAnemic,
-        anemiaSeverity,
-        giSpecialistFrequency,
-        lastGiVisit,
-        familyHistory,
-        surgeryHistory,
-        hospitalizations,
-        flareFrequency,
-        currentSymptoms,
-        dietaryRestrictions,
-        comorbidities,
-    } = req.body;
-
-    console.log('DEBUG: Diagnosis save request for user:', user_id);
-    console.log('DEBUG: Request body:', req.body);
-
-    try {
-        // Construct diagnosis date from year and month
-        let diagnosisDate = null;
-        if (diagnosisYear && diagnosisMonth) {
-            diagnosisDate = `${diagnosisYear}-${diagnosisMonth}-01`;
-        }
-
-        // Prepare current medications as text
-        const medicationsText = currentMedications && currentMedications.length > 0 
-            ? currentMedications.join(', ') 
-            : null;
-
-        // Prepare complications as text
-        const complicationsText = medicationComplications && medicationComplications.length > 0 
-            ? medicationComplications.join(', ') 
-            : null;
-
-        // Prepare symptoms as text
-        const symptomsText = currentSymptoms && currentSymptoms.length > 0 
-            ? currentSymptoms.join(', ') 
-            : null;
-
-        // Prepare dietary restrictions as text
-        const restrictionsText = dietaryRestrictions && dietaryRestrictions.length > 0 
-            ? dietaryRestrictions.join(', ') 
-            : null;
-
-        // Prepare comorbidities as text
-        const comorbiditiesText = comorbidities && comorbidities.length > 0 
-            ? comorbidities.join(', ') 
-            : null;
-
-        // Check if medical history record already exists for this user
-        const existingRecord = await pool.query(
-            'SELECT history_id FROM medical_history WHERE user_id = $1',
-            [user_id]
-        );
-
-        if (existingRecord.rows.length > 0) {
-            // Update existing record
-            const updateQuery = `
-                UPDATE medical_history 
-                SET 
-                    diagnosis = $1,
-                    diagnosis_date = $2,
-                    current_medications = $3,
-                    notes = $4,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = $5
-                RETURNING *
-            `;
-
-            const notes = JSON.stringify({
-                diseaseLocation,
-                diseaseBehavior,
-                diseaseSeverity,
-                takingMedications,
-                medicationComplications: complicationsText,
-                isAnemic,
-                anemiaSeverity,
-                giSpecialistFrequency,
-                lastGiVisit,
-                familyHistory,
-                surgeryHistory,
-                hospitalizations,
-                flareFrequency,
-                currentSymptoms: symptomsText,
-                dietaryRestrictions: restrictionsText,
-                comorbidities: comorbiditiesText,
-            });
-
-            const result = await pool.query(updateQuery, [
-                diagnosis,
-                diagnosisDate,
-                medicationsText,
-                notes,
-                user_id
-            ]);
-
-            console.log('DEBUG: Updated medical history record:', result.rows[0]);
-
-            res.json({
-                message: 'Diagnosis information updated successfully',
-                data: result.rows[0]
-            });
-        } else {
-            // Create new record
-            const insertQuery = `
-                INSERT INTO medical_history 
-                (user_id, diagnosis, diagnosis_date, current_medications, notes)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING *
-            `;
-
-            const notes = JSON.stringify({
-                diseaseLocation,
-                diseaseBehavior,
-                diseaseSeverity,
-                takingMedications,
-                medicationComplications: complicationsText,
-                isAnemic,
-                anemiaSeverity,
-                giSpecialistFrequency,
-                lastGiVisit,
-                familyHistory,
-                surgeryHistory,
-                hospitalizations,
-                flareFrequency,
-                currentSymptoms: symptomsText,
-                dietaryRestrictions: restrictionsText,
-                comorbidities: comorbiditiesText,
-            });
-
-            const result = await pool.query(insertQuery, [
-                user_id,
-                diagnosis,
-                diagnosisDate,
-                medicationsText,
-                notes
-            ]);
-
-            console.log('DEBUG: Created new medical history record:', result.rows[0]);
-
-            res.json({
-                message: 'Diagnosis information saved successfully',
-                data: result.rows[0]
-            });
-        }
-    } catch (err) {
-        console.error('Error saving diagnosis information:', err);
-        res.status(500).json({
-            error: 'Internal server error',
-            details: err.message
-        });
+// Middleware to verify user authentication
+const authenticateUser = async (req, res, next) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ error: 'No token provided' });
     }
-});
-
-// GET /api/users/:user_id/diagnosis - Get diagnosis information
-router.get('/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-
+    
     try {
         const result = await pool.query(
-            'SELECT * FROM medical_history WHERE user_id = $1',
-            [user_id]
+            'SELECT username FROM users WHERE token = $1',
+            [token]
         );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                error: 'No diagnosis information found for this user'
-            });
-        }
-
-        const record = result.rows[0];
         
-        // Parse the notes JSON to extract additional fields
-        let additionalData = {};
-        if (record.notes) {
-            try {
-                additionalData = JSON.parse(record.notes);
-            } catch (e) {
-                console.error('Error parsing notes JSON:', e);
-            }
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid token' });
         }
+        
+        req.user = result.rows[0];
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+};
 
-        // Extract diagnosis year and month from diagnosis_date
-        let diagnosisYear = null;
-        let diagnosisMonth = null;
-        if (record.diagnosis_date) {
-            const date = new Date(record.diagnosis_date);
-            diagnosisYear = date.getFullYear().toString();
-            diagnosisMonth = (date.getMonth() + 1).toString().padStart(2, '0');
+// GET /api/diagnosis - Get user's diagnosis information
+router.get('/', authenticateUser, async (req, res) => {
+    try {
+        const { username } = req.user;
+        
+        const result = await pool.query(
+            'SELECT * FROM user_diagnosis WHERE username = $1 ORDER BY updated_at DESC LIMIT 1',
+            [username]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No diagnosis found for this user' });
         }
-
-        // Parse arrays from text fields
-        const currentMedications = record.current_medications ? record.current_medications.split(', ') : [];
-        const medicationComplications = additionalData.medicationComplications ? additionalData.medicationComplications.split(', ') : [];
-        const currentSymptoms = additionalData.currentSymptoms ? additionalData.currentSymptoms.split(', ') : [];
-        const dietaryRestrictions = additionalData.dietaryRestrictions ? additionalData.dietaryRestrictions.split(', ') : [];
-        const comorbidities = additionalData.comorbidities ? additionalData.comorbidities.split(', ') : [];
-
+        
         res.json({
-            diagnosis: record.diagnosis,
+            success: true,
+            diagnosis: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error fetching diagnosis:', error);
+        res.status(500).json({ error: 'Failed to fetch diagnosis information' });
+    }
+});
+
+// POST /api/diagnosis - Save or update user's diagnosis information
+router.post('/', authenticateUser, async (req, res) => {
+    try {
+        const { username } = req.user;
+        const {
+            diagnosis,
             diagnosisYear,
             diagnosisMonth,
-            diseaseLocation: additionalData.diseaseLocation,
-            diseaseBehavior: additionalData.diseaseBehavior,
-            diseaseSeverity: additionalData.diseaseSeverity,
-            takingMedications: additionalData.takingMedications,
+            diseaseLocation,
+            diseaseBehavior,
+            diseaseSeverity,
+            takingMedications,
             currentMedications,
             medicationComplications,
-            isAnemic: additionalData.isAnemic,
-            anemiaSeverity: additionalData.anemiaSeverity,
-            giSpecialistFrequency: additionalData.giSpecialistFrequency,
-            lastGiVisit: additionalData.lastGiVisit,
-            familyHistory: additionalData.familyHistory,
-            surgeryHistory: additionalData.surgeryHistory,
-            hospitalizations: additionalData.hospitalizations,
-            flareFrequency: additionalData.flareFrequency,
+            isAnemic,
+            anemiaSeverity,
+            giSpecialistFrequency,
+            lastGiVisit,
+            familyHistory,
+            surgeryHistory,
+            hospitalizations,
+            flareFrequency,
             currentSymptoms,
             dietaryRestrictions,
-            comorbidities,
+            comorbidities
+        } = req.body;
+        
+        // Validate required fields
+        if (!diagnosis) {
+            return res.status(400).json({ error: 'Diagnosis is required' });
+        }
+        
+        // Check if user already has a diagnosis record
+        const existingResult = await pool.query(
+            'SELECT id FROM user_diagnosis WHERE username = $1',
+            [username]
+        );
+        
+        let result;
+        
+        if (existingResult.rows.length > 0) {
+            // Update existing record
+            result = await pool.query(`
+                UPDATE user_diagnosis SET
+                    diagnosis = $1,
+                    diagnosis_year = $2,
+                    diagnosis_month = $3,
+                    disease_location = $4,
+                    disease_behavior = $5,
+                    disease_severity = $6,
+                    taking_medications = $7,
+                    current_medications = $8,
+                    medication_complications = $9,
+                    is_anemic = $10,
+                    anemia_severity = $11,
+                    gi_specialist_frequency = $12,
+                    last_gi_visit = $13,
+                    family_history = $14,
+                    surgery_history = $15,
+                    hospitalizations = $16,
+                    flare_frequency = $17,
+                    current_symptoms = $18,
+                    dietary_restrictions = $19,
+                    comorbidities = $20,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE username = $21
+                RETURNING *
+            `, [
+                diagnosis,
+                diagnosisYear || null,
+                diagnosisMonth || null,
+                diseaseLocation || null,
+                diseaseBehavior || null,
+                diseaseSeverity || null,
+                takingMedications || null,
+                currentMedications || [],
+                medicationComplications || [],
+                isAnemic || null,
+                anemiaSeverity || null,
+                giSpecialistFrequency || null,
+                lastGiVisit || null,
+                familyHistory || null,
+                surgeryHistory || null,
+                hospitalizations || null,
+                flareFrequency || null,
+                currentSymptoms || [],
+                dietaryRestrictions || [],
+                comorbidities || [],
+                username
+            ]);
+        } else {
+            // Insert new record
+            result = await pool.query(`
+                INSERT INTO user_diagnosis (
+                    username,
+                    diagnosis,
+                    diagnosis_year,
+                    diagnosis_month,
+                    disease_location,
+                    disease_behavior,
+                    disease_severity,
+                    taking_medications,
+                    current_medications,
+                    medication_complications,
+                    is_anemic,
+                    anemia_severity,
+                    gi_specialist_frequency,
+                    last_gi_visit,
+                    family_history,
+                    surgery_history,
+                    hospitalizations,
+                    flare_frequency,
+                    current_symptoms,
+                    dietary_restrictions,
+                    comorbidities
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+                RETURNING *
+            `, [
+                username,
+                diagnosis,
+                diagnosisYear || null,
+                diagnosisMonth || null,
+                diseaseLocation || null,
+                diseaseBehavior || null,
+                diseaseSeverity || null,
+                takingMedications || null,
+                currentMedications || [],
+                medicationComplications || [],
+                isAnemic || null,
+                anemiaSeverity || null,
+                giSpecialistFrequency || null,
+                lastGiVisit || null,
+                familyHistory || null,
+                surgeryHistory || null,
+                hospitalizations || null,
+                flareFrequency || null,
+                currentSymptoms || [],
+                dietaryRestrictions || [],
+                comorbidities || []
+            ]);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Diagnosis information saved successfully',
+            diagnosis: result.rows[0]
         });
-    } catch (err) {
-        console.error('Error fetching diagnosis information:', err);
-        res.status(500).json({
-            error: 'Internal server error',
-            details: err.message
+    } catch (error) {
+        console.error('Error saving diagnosis:', error);
+        res.status(500).json({ error: 'Failed to save diagnosis information' });
+    }
+});
+
+// DELETE /api/diagnosis - Delete user's diagnosis information
+router.delete('/', authenticateUser, async (req, res) => {
+    try {
+        const { username } = req.user;
+        
+        const result = await pool.query(
+            'DELETE FROM user_diagnosis WHERE username = $1 RETURNING id',
+            [username]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No diagnosis found to delete' });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Diagnosis information deleted successfully'
         });
+    } catch (error) {
+        console.error('Error deleting diagnosis:', error);
+        res.status(500).json({ error: 'Failed to delete diagnosis information' });
+    }
+});
+
+// GET /api/diagnosis/history - Get diagnosis history for user
+router.get('/history', authenticateUser, async (req, res) => {
+    try {
+        const { username } = req.user;
+        
+        const result = await pool.query(
+            'SELECT * FROM user_diagnosis WHERE username = $1 ORDER BY updated_at DESC',
+            [username]
+        );
+        
+        res.json({
+            success: true,
+            history: result.rows
+        });
+    } catch (error) {
+        console.error('Error fetching diagnosis history:', error);
+        res.status(500).json({ error: 'Failed to fetch diagnosis history' });
     }
 });
 
