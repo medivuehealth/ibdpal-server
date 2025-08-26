@@ -3,27 +3,36 @@ const nodemailer = require('nodemailer');
 class EmailService {
   constructor() {
     this.transporter = null;
-    this.initializeTransporter();
+    // Initialize transporter asynchronously to avoid blocking startup
+    this.initializeTransporter().catch(error => {
+      console.error('📧 Email service initialization failed:', error.message);
+      console.log('📧 Email service will fall back to console logging');
+    });
   }
 
-  initializeTransporter() {
+  async initializeTransporter() {
     // For development/testing, we'll use a test account
     // In production, you should use a real email service like SendGrid, Mailgun, or AWS SES
     
     if (process.env.NODE_ENV === 'production') {
-      // Production email configuration
-      this.transporter = nodemailer.createTransporter({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: process.env.SMTP_PORT || 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        }
-      });
+      // Production email configuration - only if SMTP credentials are provided
+      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+        this.transporter = nodemailer.createTransporter({
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
+          port: process.env.SMTP_PORT || 587,
+          secure: false, // true for 465, false for other ports
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+          }
+        });
+        console.log('📧 Production email service initialized');
+      } else {
+        console.log('📧 No SMTP credentials provided, using console logging fallback');
+      }
     } else {
       // Development: Use Ethereal Email (fake SMTP for testing)
-      this.createTestAccount();
+      await this.createTestAccount();
     }
   }
 
