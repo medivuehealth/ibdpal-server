@@ -17,7 +17,7 @@ class EmailService {
     if (process.env.NODE_ENV === 'production') {
       // Production email configuration - only if SMTP credentials are provided
       if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: process.env.SMTP_PORT || 587,
           secure: false, // true for 465, false for other ports
@@ -39,7 +39,7 @@ class EmailService {
   async createTestAccount() {
     try {
       const testAccount = await nodemailer.createTestAccount();
-      this.transporter = nodemailer.createTransporter({
+      this.transporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,
