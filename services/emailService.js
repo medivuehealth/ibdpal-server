@@ -2,6 +2,11 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../config.env') });
 
+// 🔍 VERSION TRACKING
+const EMAIL_SERVICE_VERSION = 'v2.1.0-fixed-fromEmail-' + Date.now();
+console.log('🔍 EMAIL SERVICE VERSION:', EMAIL_SERVICE_VERSION);
+console.log('🔍 EMAIL SERVICE FILE PATH:', __filename);
+
 // Debug ALL environment variables to understand Railway's behavior
 console.log('🔍 ALL Environment Variables Debug:');
 console.log('=' .repeat(50));
@@ -104,6 +109,13 @@ class EmailService {
 
   async sendVerificationEmail(email, verificationCode, firstName = 'User') {
     try {
+      // 🔍 COMPREHENSIVE DEBUGGING: Track method execution
+      console.log('🔍 COMPREHENSIVE DEBUGGING START');
+      console.log('   Method: sendVerificationEmail');
+      console.log('   File: services/emailService.js');
+      console.log('   Timestamp:', new Date().toISOString());
+      console.log('   Parameters:', { email, verificationCode, firstName });
+      
       // Always check environment variables at runtime
       console.log('📧 Runtime environment check:');
       console.log(`   EMAIL_SERVICE_KEY: ${process.env.EMAIL_SERVICE_KEY ? 'SET' : 'NOT SET'}`);
@@ -135,9 +147,21 @@ class EmailService {
         return { success: true, message: 'Verification code logged to console' };
       }
 
-      // Get the from email from environment variables
-      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+      // 🔍 COMPREHENSIVE DEBUGGING: Track fromEmail variable
+      console.log('🔍 DEBUGGING fromEmail variable:');
+      console.log('   Step 1: Checking environment variables...');
+      console.log(`   EMAIL_SENDER: ${process.env.EMAIL_SENDER || 'NOT SET'}`);
+      console.log(`   MAIL_SENDER: ${process.env.MAIL_SENDER || 'NOT SET'}`);
+      console.log(`   SENDER_EMAIL: ${process.env.SENDER_EMAIL || 'NOT SET'}`);
+      console.log(`   FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
       
+      console.log('   Step 2: Defining fromEmail variable...');
+      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+      console.log(`   fromEmail value: ${fromEmail || 'UNDEFINED'}`);
+      console.log(`   fromEmail type: ${typeof fromEmail}`);
+      console.log(`   fromEmail length: ${fromEmail ? fromEmail.length : 'N/A'}`);
+      
+      console.log('   Step 3: Creating mailOptions...');
       const mailOptions = {
         from: fromEmail || '"IBDPal" <your-gmail@gmail.com>',
         to: email,
@@ -145,6 +169,8 @@ class EmailService {
         html: this.getVerificationEmailTemplate(verificationCode, firstName),
         text: this.getVerificationEmailText(verificationCode, firstName)
       };
+      console.log(`   mailOptions.from: ${mailOptions.from}`);
+      console.log('   Step 4: MailOptions created successfully');
 
       const info = await this.transporter.sendMail(mailOptions);
       
@@ -153,9 +179,12 @@ class EmailService {
         console.log('📧 Preview URL:', nodemailer.getTestMessageUrl(info));
       }
 
+      console.log('🔍 COMPREHENSIVE DEBUGGING END: Success');
       return { success: true, messageId: info.messageId };
     } catch (error) {
+      console.error('🔍 COMPREHENSIVE DEBUGGING END: Error');
       console.error('📧 Email sending failed:', error);
+      console.error('📧 Error stack:', error.stack);
       // Fallback to console logging
       console.log(`📧 Verification code for ${email}: ${verificationCode}`);
       return { success: false, error: error.message };
