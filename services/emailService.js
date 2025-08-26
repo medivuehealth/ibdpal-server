@@ -26,6 +26,7 @@ class EmailService {
     console.log(`📧 NODE_ENV: ${process.env.NODE_ENV}`);
     console.log(`📧 SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
     console.log(`📧 FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+    console.log(`📧 DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
     
     if (process.env.NODE_ENV === 'production') {
       // Check for SendGrid API key first (preferred method)
@@ -89,6 +90,12 @@ class EmailService {
 
   async sendVerificationEmail(email, verificationCode, firstName = 'User') {
     try {
+      // Always check environment variables at runtime
+      console.log('📧 Runtime environment check:');
+      console.log(`   SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
+      console.log(`   FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+      console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+      
       // If not initialized yet, try to initialize
       if (!this.initialized) {
         console.log('📧 Email service not initialized, attempting to initialize...');
