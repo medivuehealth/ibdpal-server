@@ -177,8 +177,18 @@ class EmailService {
       console.log(`   Transporter type: ${this.transporter ? typeof this.transporter : 'N/A'}`);
       
       console.log('   Step 5.5: Attempting to send email...');
+      console.log('   Step 5.6: Setting up timeout for SendGrid call...');
+      
       try {
-        const info = await this.transporter.sendMail(mailOptions);
+        // Add timeout to prevent hanging
+        const sendPromise = this.transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('SendGrid timeout after 10 seconds')), 10000);
+        });
+        
+        console.log('   Step 5.7: Waiting for SendGrid response...');
+        const info = await Promise.race([sendPromise, timeoutPromise]);
+        
         console.log('   Step 6: Email sent successfully!');
         console.log(`   Message ID: ${info.messageId}`);
         return { success: true, messageId: info.messageId };
@@ -187,6 +197,7 @@ class EmailService {
         console.error('   Error message:', sendError.message);
         console.error('   Error code:', sendError.code);
         console.error('   Error response:', sendError.response);
+        console.error('   Error stack:', sendError.stack);
         throw sendError; // Re-throw to be caught by outer catch block
       }
       
