@@ -51,30 +51,30 @@ class EmailService {
       
                    if (sendgridKey) {
                console.log('📧 Configuring SendGrid email service...');
-               this.transporter = nodemailer.createTransport({
-                 host: 'smtp.sendgrid.net',
-                 port: 587,
-                 secure: false,
-                 auth: {
-                   user: 'apikey',
-                   pass: sendgridKey
-                 },
-                 // Add connection timeout settings
-                 connectionTimeout: 10000,
-                 greetingTimeout: 10000,
-                 socketTimeout: 10000
-               });
-               console.log('📧 SendGrid email service initialized successfully');
                
-               // Test the SMTP connection
-               console.log('📧 Testing SMTP connection...');
+               // Try SMTP first
                try {
+                 this.transporter = nodemailer.createTransport({
+                   host: 'smtp.sendgrid.net',
+                   port: 587,
+                   secure: false,
+                   auth: {
+                     user: 'apikey',
+                     pass: sendgridKey
+                   },
+                   // Add connection timeout settings
+                   connectionTimeout: 10000,
+                   greetingTimeout: 10000,
+                   socketTimeout: 10000
+                 });
+                 
+                 console.log('📧 Testing SMTP connection...');
                  await this.transporter.verify();
                  console.log('✅ SMTP connection verified successfully');
                  this.initialized = true;
-               } catch (verifyError) {
-                 console.error('❌ SMTP connection failed:', verifyError.message);
-                 console.log('📧 Falling back to console logging');
+               } catch (smtpError) {
+                 console.error('❌ SMTP connection failed:', smtpError.message);
+                 console.log('📧 SMTP failed, but continuing with API fallback...');
                  this.transporter = null;
                }
              }
@@ -192,28 +192,38 @@ class EmailService {
       console.log(`   Transporter type: ${this.transporter ? typeof this.transporter : 'N/A'}`);
       
       console.log('   Step 5.5: Attempting to send email...');
-      console.log('   Step 5.6: Setting up timeout for SendGrid call...');
       
+      // Try SMTP first, then API fallback
+      if (this.transporter) {
+        console.log('   Step 5.6: Using SMTP transporter...');
+        try {
+          const sendPromise = this.transporter.sendMail(mailOptions);
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('SendGrid SMTP timeout after 10 seconds')), 10000);
+          });
+          
+          console.log('   Step 5.7: Waiting for SMTP response...');
+          const info = await Promise.race([sendPromise, timeoutPromise]);
+          
+          console.log('   Step 6: Email sent successfully via SMTP!');
+          console.log(`   Message ID: ${info.messageId}`);
+          return { success: true, messageId: info.messageId };
+        } catch (smtpError) {
+          console.error('   Step 5.6 ERROR: SMTP failed, trying API fallback...');
+          console.error('   SMTP Error:', smtpError.message);
+        }
+      }
+      
+      // API Fallback
+      console.log('   Step 5.8: Using SendGrid API fallback...');
       try {
-        // Add timeout to prevent hanging
-        const sendPromise = this.transporter.sendMail(mailOptions);
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('SendGrid timeout after 10 seconds')), 10000);
-        });
-        
-        console.log('   Step 5.7: Waiting for SendGrid response...');
-        const info = await Promise.race([sendPromise, timeoutPromise]);
-        
-        console.log('   Step 6: Email sent successfully!');
-        console.log(`   Message ID: ${info.messageId}`);
-        return { success: true, messageId: info.messageId };
-      } catch (sendError) {
-        console.error('   Step 5.5 ERROR: SendGrid sending failed');
-        console.error('   Error message:', sendError.message);
-        console.error('   Error code:', sendError.code);
-        console.error('   Error response:', sendError.response);
-        console.error('   Error stack:', sendError.stack);
-        throw sendError; // Re-throw to be caught by outer catch block
+        const result = await this.sendViaSendGridAPI(email, verificationCode, firstName, fromEmail);
+        console.log('   Step 6: Email sent successfully via API!');
+        return result;
+      } catch (apiError) {
+        console.error('   Step 5.8 ERROR: API fallback also failed');
+        console.error('   API Error:', apiError.message);
+        throw apiError;
       }
       
       if (process.env.NODE_ENV === 'development') {
@@ -306,6 +316,71 @@ The IBDPal Team
 This is an automated message. Please do not reply to this email.
 IBDPal - Educational IBD Management Tool
     `;
+  }
+
+  async sendViaSendGridAPI(email, verificationCode, firstName, fromEmail) {
+    const https = require('https');
+    const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.SENDGRID_API_KEY;
+    
+    const emailData = {
+      personalizations: [{
+        to: [{ email: email }],
+        subject: 'Verify Your IBDPal Account'
+      }],
+      from: { email: fromEmail, name: 'IBDPal' },
+      content: [{
+        type: 'text/html',
+        value: this.getVerificationEmailTemplate(verificationCode, firstName)
+      }]
+    };
+
+    const postData = JSON.stringify(emailData);
+    
+    const options = {
+      hostname: 'api.sendgrid.com',
+      port: 443,
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sendgridKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode === 202) {
+            console.log('✅ SendGrid API email sent successfully');
+            resolve({ success: true, messageId: `api-${Date.now()}` });
+          } else {
+            console.error('❌ SendGrid API error:', res.statusCode, data);
+            reject(new Error(`SendGrid API error: ${res.statusCode} - ${data}`));
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('❌ SendGrid API request error:', error.message);
+        reject(error);
+      });
+      
+      req.setTimeout(10000, () => {
+        console.log('❌ SendGrid API timeout');
+        req.destroy();
+        reject(new Error('SendGrid API timeout'));
+      });
+      
+      req.write(postData);
+      req.end();
+    });
   }
 }
 
