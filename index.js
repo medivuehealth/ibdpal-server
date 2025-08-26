@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+// Load environment variables - prioritize system env vars over .env file
 require('dotenv').config({ path: './config.env' });
 
 const authRoutes = require('./routes/auth');
@@ -14,6 +15,13 @@ const blogRoutes = require('./routes/blogs');
 const app = express();
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3004;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Debug environment variables
+console.log('🔍 Environment Variables Debug:');
+console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`   SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
+console.log(`   FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
 
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);

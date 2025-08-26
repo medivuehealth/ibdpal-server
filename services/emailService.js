@@ -1,4 +1,11 @@
 const nodemailer = require('nodemailer');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../config.env') });
+
+// Debug environment variables (same pattern as database)
+console.log('Email service config:');
+console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+console.log('FROM_EMAIL:', process.env.FROM_EMAIL || 'NOT SET');
 
 class EmailService {
   constructor() {
