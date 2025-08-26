@@ -176,9 +176,19 @@ class EmailService {
       console.log(`   Transporter exists: ${this.transporter ? 'YES' : 'NO'}`);
       console.log(`   Transporter type: ${this.transporter ? typeof this.transporter : 'N/A'}`);
       
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('   Step 6: Email sent successfully!');
-      console.log(`   Message ID: ${info.messageId}`);
+      console.log('   Step 5.5: Attempting to send email...');
+      try {
+        const info = await this.transporter.sendMail(mailOptions);
+        console.log('   Step 6: Email sent successfully!');
+        console.log(`   Message ID: ${info.messageId}`);
+        return { success: true, messageId: info.messageId };
+      } catch (sendError) {
+        console.error('   Step 5.5 ERROR: SendGrid sending failed');
+        console.error('   Error message:', sendError.message);
+        console.error('   Error code:', sendError.code);
+        console.error('   Error response:', sendError.response);
+        throw sendError; // Re-throw to be caught by outer catch block
+      }
       
       if (process.env.NODE_ENV === 'development') {
         console.log('📧 Email sent:', info.messageId);
