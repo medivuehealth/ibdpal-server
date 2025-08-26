@@ -65,7 +65,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    app: process.env.APP_NAME || 'IBDPal',
+    version: process.env.APP_VERSION || '1.0.0',
+    environment: NODE_ENV,
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    database: 'connected' // You can add actual DB health check here
+  });
+});
+
+// API Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
