@@ -2,10 +2,20 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../config.env') });
 
-// Debug environment variables (same pattern as database)
-console.log('Email service config:');
-console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET');
-console.log('FROM_EMAIL:', process.env.FROM_EMAIL || 'NOT SET');
+// Debug ALL environment variables to understand Railway's behavior
+console.log('🔍 ALL Environment Variables Debug:');
+console.log('=' .repeat(50));
+Object.keys(process.env).forEach(key => {
+  if (key.includes('EMAIL') || key.includes('MAIL') || key.includes('SENDGRID') || key.includes('DATABASE') || key.includes('NODE_ENV')) {
+    const value = process.env[key];
+    if (value) {
+      console.log(`   ✅ ${key}: SET (${value.length} chars)`);
+    } else {
+      console.log(`   ❌ ${key}: NOT SET`);
+    }
+  }
+});
+console.log('=' .repeat(50));
 
 class EmailService {
   constructor() {
@@ -24,13 +34,17 @@ class EmailService {
     
     console.log('📧 Initializing email service...');
     console.log(`📧 NODE_ENV: ${process.env.NODE_ENV}`);
-    console.log(`📧 SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
-    console.log(`📧 FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+    console.log(`📧 EMAIL_SERVICE_KEY: ${process.env.EMAIL_SERVICE_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`📧 EMAIL_SENDER: ${process.env.EMAIL_SENDER || 'NOT SET'}`);
     console.log(`📧 DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
     
     if (process.env.NODE_ENV === 'production') {
       // Check for SendGrid API key first (preferred method)
-      if (process.env.SENDGRID_API_KEY) {
+      // Try multiple possible variable names for SendGrid (non-sensitive)
+      const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.MAIL_SERVICE_KEY || process.env.EMAIL_PROVIDER_KEY || process.env.SENDGRID_API_KEY;
+      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+      
+      if (sendgridKey) {
         console.log('📧 Configuring SendGrid email service...');
         this.transporter = nodemailer.createTransport({
           host: 'smtp.sendgrid.net',
@@ -38,7 +52,7 @@ class EmailService {
           secure: false,
           auth: {
             user: 'apikey',
-            pass: process.env.SENDGRID_API_KEY
+            pass: sendgridKey
           }
         });
         console.log('📧 SendGrid email service initialized successfully');
@@ -92,9 +106,21 @@ class EmailService {
     try {
       // Always check environment variables at runtime
       console.log('📧 Runtime environment check:');
-      console.log(`   SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
-      console.log(`   FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+      console.log(`   EMAIL_SERVICE_KEY: ${process.env.EMAIL_SERVICE_KEY ? 'SET' : 'NOT SET'}`);
+      console.log(`   EMAIL_SENDER: ${process.env.EMAIL_SENDER || 'NOT SET'}`);
       console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+      
+      // Test if Railway secret variables are accessible
+      console.log('🔍 Testing Railway secret variables:');
+      const testVars = ['EMAIL_SERVICE_KEY', 'EMAIL_SENDER', 'DATABASE_URL', 'JWT_SECRET'];
+      testVars.forEach(varName => {
+        const value = process.env[varName];
+        if (value) {
+          console.log(`   ✅ ${varName}: Available (${value.length} chars)`);
+        } else {
+          console.log(`   ❌ ${varName}: Not available`);
+        }
+      });
       
       // If not initialized yet, try to initialize
       if (!this.initialized) {
@@ -110,7 +136,7 @@ class EmailService {
       }
 
       const mailOptions = {
-        from: process.env.FROM_EMAIL || '"IBDPal" <your-gmail@gmail.com>',
+        from: fromEmail || '"IBDPal" <your-gmail@gmail.com>',
         to: email,
         subject: 'Verify Your IBDPal Account',
         html: this.getVerificationEmailTemplate(verificationCode, firstName),
