@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 class EmailService {
   constructor() {
     this.transporter = null;
+    this.initialized = false;
     // Initialize transporter asynchronously to avoid blocking startup
     this.initializeTransporter().catch(error => {
       console.error('📧 Email service initialization failed:', error.message);
@@ -33,6 +34,7 @@ class EmailService {
           }
         });
         console.log('📧 SendGrid email service initialized successfully');
+        this.initialized = true;
       }
       // Fallback to SMTP credentials if SendGrid not configured
       else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -47,6 +49,7 @@ class EmailService {
           }
         });
         console.log('📧 SMTP email service initialized');
+        this.initialized = true;
       } else {
         console.log('📧 No email credentials provided, using console logging fallback');
       }
@@ -79,6 +82,12 @@ class EmailService {
 
   async sendVerificationEmail(email, verificationCode, firstName = 'User') {
     try {
+      // If not initialized yet, try to initialize
+      if (!this.initialized) {
+        console.log('📧 Email service not initialized, attempting to initialize...');
+        await this.initializeTransporter();
+      }
+      
       if (!this.transporter) {
         // Fallback to console logging if email service is not available
         console.log(`📧 Verification code for ${email}: ${verificationCode}`);
