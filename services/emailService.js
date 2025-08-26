@@ -49,20 +49,35 @@ class EmailService {
       const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.MAIL_SERVICE_KEY || process.env.EMAIL_PROVIDER_KEY || process.env.SENDGRID_API_KEY;
       const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
       
-      if (sendgridKey) {
-        console.log('📧 Configuring SendGrid email service...');
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          secure: false,
-          auth: {
-            user: 'apikey',
-            pass: sendgridKey
-          }
-        });
-        console.log('📧 SendGrid email service initialized successfully');
-        this.initialized = true;
-      }
+                   if (sendgridKey) {
+               console.log('📧 Configuring SendGrid email service...');
+               this.transporter = nodemailer.createTransport({
+                 host: 'smtp.sendgrid.net',
+                 port: 587,
+                 secure: false,
+                 auth: {
+                   user: 'apikey',
+                   pass: sendgridKey
+                 },
+                 // Add connection timeout settings
+                 connectionTimeout: 10000,
+                 greetingTimeout: 10000,
+                 socketTimeout: 10000
+               });
+               console.log('📧 SendGrid email service initialized successfully');
+               
+               // Test the SMTP connection
+               console.log('📧 Testing SMTP connection...');
+               try {
+                 await this.transporter.verify();
+                 console.log('✅ SMTP connection verified successfully');
+                 this.initialized = true;
+               } catch (verifyError) {
+                 console.error('❌ SMTP connection failed:', verifyError.message);
+                 console.log('📧 Falling back to console logging');
+                 this.transporter = null;
+               }
+             }
       // Fallback to SMTP credentials if SendGrid not configured
       else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
         console.log('📧 Configuring SMTP email service...');
