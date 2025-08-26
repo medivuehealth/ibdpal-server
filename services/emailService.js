@@ -26,6 +26,7 @@ class EmailService {
   constructor() {
     this.transporter = null;
     this.initialized = false;
+    this.hasSendGridCredentials = false;
     // Initialize transporter asynchronously to avoid blocking startup
     this.initializeTransporter().catch(error => {
       console.error('📧 Email service initialization failed:', error.message);
@@ -51,6 +52,7 @@ class EmailService {
       
                    if (sendgridKey) {
                console.log('📧 Configuring SendGrid email service...');
+               this.hasSendGridCredentials = true;
                
                // Try SMTP first
                try {
@@ -155,8 +157,8 @@ class EmailService {
         await this.initializeTransporter();
       }
       
-      if (!this.transporter) {
-        // Fallback to console logging if email service is not available
+      if (!this.transporter && !this.hasSendGridCredentials) {
+        // Only fallback to console logging if no SendGrid credentials
         console.log(`📧 Verification code for ${email}: ${verificationCode}`);
         console.log(`📧 Email would be sent to: ${email}`);
         return { success: true, message: 'Verification code logged to console' };
