@@ -171,8 +171,14 @@ class EmailService {
       };
       console.log(`   mailOptions.from: ${mailOptions.from}`);
       console.log('   Step 4: MailOptions created successfully');
-
+      
+      console.log('   Step 5: About to send email via transporter...');
+      console.log(`   Transporter exists: ${this.transporter ? 'YES' : 'NO'}`);
+      console.log(`   Transporter type: ${this.transporter ? typeof this.transporter : 'N/A'}`);
+      
       const info = await this.transporter.sendMail(mailOptions);
+      console.log('   Step 6: Email sent successfully!');
+      console.log(`   Message ID: ${info.messageId}`);
       
       if (process.env.NODE_ENV === 'development') {
         console.log('📧 Email sent:', info.messageId);
