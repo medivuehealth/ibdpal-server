@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticateToken } = require('../middleware/auth');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -114,9 +115,9 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     const user = newUser.rows[0];
 
-    // TODO: Send verification email here
-    // For now, we'll just log the verification code
-    console.log(`📧 Verification code for ${email}: ${verificationCode}`);
+    // Send verification email
+    const emailResult = await emailService.sendVerificationEmail(email, verificationCode, firstName);
+    console.log('📧 Email service result:', emailResult);
 
     // Log registration attempt
     await db.query(
@@ -611,9 +612,9 @@ router.post('/resend-verification', async (req, res) => {
       [verificationCode, verificationExpires, user.user_id]
     );
 
-    // TODO: Send verification email here
-    // For now, we'll just log the verification code
-    console.log(`📧 New verification code for ${email}: ${verificationCode}`);
+    // Send verification email
+    const emailResult = await emailService.sendVerificationEmail(email, verificationCode, user.first_name || 'User');
+    console.log('📧 Resend email service result:', emailResult);
 
     res.json({
       message: 'Verification code sent successfully',
