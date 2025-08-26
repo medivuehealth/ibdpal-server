@@ -15,8 +15,21 @@ class EmailService {
     // In production, you should use a real email service like SendGrid, Mailgun, or AWS SES
     
     if (process.env.NODE_ENV === 'production') {
-      // Production email configuration - only if SMTP credentials are provided
-      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      // Check for SendGrid API key first (preferred method)
+      if (process.env.SENDGRID_API_KEY) {
+        this.transporter = nodemailer.createTransport({
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          secure: false,
+          auth: {
+            user: 'apikey',
+            pass: process.env.SENDGRID_API_KEY
+          }
+        });
+        console.log('📧 SendGrid email service initialized');
+      }
+      // Fallback to SMTP credentials if SendGrid not configured
+      else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
         this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: process.env.SMTP_PORT || 587,
@@ -26,9 +39,9 @@ class EmailService {
             pass: process.env.SMTP_PASS
           }
         });
-        console.log('📧 Production email service initialized');
+        console.log('📧 SMTP email service initialized');
       } else {
-        console.log('📧 No SMTP credentials provided, using console logging fallback');
+        console.log('📧 No email credentials provided, using console logging fallback');
       }
     } else {
       // Development: Use Ethereal Email (fake SMTP for testing)
@@ -66,7 +79,7 @@ class EmailService {
       }
 
       const mailOptions = {
-        from: process.env.FROM_EMAIL || '"IBDPal" <noreply@ibdpal.com>',
+        from: process.env.FROM_EMAIL || '"IBDPal" <your-gmail@gmail.com>',
         to: email,
         subject: 'Verify Your IBDPal Account',
         html: this.getVerificationEmailTemplate(verificationCode, firstName),
