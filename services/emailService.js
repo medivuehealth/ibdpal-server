@@ -253,14 +253,21 @@ class EmailService {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Verify Your IBDPal Account</title>
+        <meta name="description" content="Complete your IBDPal account verification">
+        <meta name="author" content="IBDPal Team">
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
           .header { background: #4CAF50; color: white; padding: 20px; text-align: center; }
           .content { padding: 20px; background: #f9f9f9; }
-          .code { background: #fff; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #4CAF50; border: 2px solid #4CAF50; border-radius: 5px; margin: 20px 0; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .code { background: #fff; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #4CAF50; border: 2px solid #4CAF50; border-radius: 5px; margin: 20px 0; letter-spacing: 2px; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background: #f5f5f5; }
           .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          .button { display: inline-block; background: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+          @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; }
+            .code { font-size: 20px !important; }
+          }
         </style>
       </head>
       <body>
@@ -274,7 +281,14 @@ class EmailService {
             
             <div class="code">${verificationCode}</div>
             
-            <p>This code will expire in 15 minutes for security reasons.</p>
+            <p><strong>This code will expire in 15 minutes for security reasons.</strong></p>
+            
+            <p>If you're having trouble with the code, you can also:</p>
+            <ul>
+              <li>Copy and paste the code directly</li>
+              <li>Request a new code if this one expires</li>
+              <li>Check your spam folder if you don't see this email</li>
+            </ul>
             
             <div class="warning">
               <strong>Important:</strong> This app is for educational purposes only and should not be used as medical advice. 
@@ -288,6 +302,7 @@ class EmailService {
           <div class="footer">
             <p>This is an automated message. Please do not reply to this email.</p>
             <p>IBDPal - Educational IBD Management Tool</p>
+            <p>© 2025 IBDPal. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -333,7 +348,23 @@ IBDPal - Educational IBD Management Tool
       content: [{
         type: 'text/html',
         value: this.getVerificationEmailTemplate(verificationCode, firstName)
-      }]
+      }],
+      // Add headers to improve deliverability and reduce spam
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high',
+        'X-Mailer': 'IBDPal/1.0',
+        'List-Unsubscribe': '<mailto:unsubscribe@ibdpal.com>',
+        'Precedence': 'bulk'
+      },
+      // Add categories for better tracking
+      categories: ['verification', 'account-creation'],
+      // Add custom arguments
+      customArgs: {
+        'email_type': 'verification',
+        'user_type': 'new_user'
+      }
     };
 
     const postData = JSON.stringify(emailData);
