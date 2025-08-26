@@ -14,9 +14,15 @@ class EmailService {
     // For development/testing, we'll use a test account
     // In production, you should use a real email service like SendGrid, Mailgun, or AWS SES
     
+    console.log('📧 Initializing email service...');
+    console.log(`📧 NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`📧 SENDGRID_API_KEY: ${process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`📧 FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
+    
     if (process.env.NODE_ENV === 'production') {
       // Check for SendGrid API key first (preferred method)
       if (process.env.SENDGRID_API_KEY) {
+        console.log('📧 Configuring SendGrid email service...');
         this.transporter = nodemailer.createTransport({
           host: 'smtp.sendgrid.net',
           port: 587,
@@ -26,10 +32,11 @@ class EmailService {
             pass: process.env.SENDGRID_API_KEY
           }
         });
-        console.log('📧 SendGrid email service initialized');
+        console.log('📧 SendGrid email service initialized successfully');
       }
       // Fallback to SMTP credentials if SendGrid not configured
       else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+        console.log('📧 Configuring SMTP email service...');
         this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: process.env.SMTP_PORT || 587,
@@ -45,6 +52,7 @@ class EmailService {
       }
     } else {
       // Development: Use Ethereal Email (fake SMTP for testing)
+      console.log('📧 Configuring development email service...');
       await this.createTestAccount();
     }
   }
