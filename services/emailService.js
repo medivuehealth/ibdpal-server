@@ -135,6 +135,9 @@ class EmailService {
         return { success: true, message: 'Verification code logged to console' };
       }
 
+      // Get the from email from environment variables
+      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+      
       const mailOptions = {
         from: fromEmail || '"IBDPal" <your-gmail@gmail.com>',
         to: email,
