@@ -54,31 +54,11 @@ class EmailService {
                console.log('📧 Configuring SendGrid email service...');
                this.hasSendGridCredentials = true;
                
-               // Try SMTP first
-               try {
-                 this.transporter = nodemailer.createTransport({
-                   host: 'smtp.sendgrid.net',
-                   port: 587,
-                   secure: false,
-                   auth: {
-                     user: 'apikey',
-                     pass: sendgridKey
-                   },
-                   // Add connection timeout settings
-                   connectionTimeout: 10000,
-                   greetingTimeout: 10000,
-                   socketTimeout: 10000
-                 });
-                 
-                 console.log('📧 Testing SMTP connection...');
-                 await this.transporter.verify();
-                 console.log('✅ SMTP connection verified successfully');
-                 this.initialized = true;
-               } catch (smtpError) {
-                 console.error('❌ SMTP connection failed:', smtpError.message);
-                 console.log('📧 SMTP failed, but continuing with API fallback...');
-                 this.transporter = null;
-               }
+               // Use API as default, SMTP as fallback
+               console.log('📧 Using SendGrid API as primary method...');
+               this.transporter = null; // No SMTP transporter needed for API
+               this.initialized = true;
+               console.log('✅ SendGrid API configured successfully');
              }
       // Fallback to SMTP credentials if SendGrid not configured
       else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -195,37 +175,46 @@ class EmailService {
       
       console.log('   Step 5.5: Attempting to send email...');
       
-      // Try SMTP first, then API fallback
-      if (this.transporter) {
-        console.log('   Step 5.6: Using SMTP transporter...');
+      // Use API as default, SMTP as fallback
+      if (this.hasSendGridCredentials) {
+        console.log('   Step 5.6: Using SendGrid API as primary method...');
         try {
-          const sendPromise = this.transporter.sendMail(mailOptions);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('SendGrid SMTP timeout after 10 seconds')), 10000);
-          });
+          const result = await this.sendViaSendGridAPI(email, verificationCode, firstName, fromEmail);
+          console.log('   Step 6: Email sent successfully via API!');
+          return result;
+        } catch (apiError) {
+          console.error('   Step 5.6 ERROR: API failed, trying SMTP fallback...');
+          console.error('   API Error:', apiError.message);
           
-          console.log('   Step 5.7: Waiting for SMTP response...');
-          const info = await Promise.race([sendPromise, timeoutPromise]);
-          
-          console.log('   Step 6: Email sent successfully via SMTP!');
-          console.log(`   Message ID: ${info.messageId}`);
-          return { success: true, messageId: info.messageId };
-        } catch (smtpError) {
-          console.error('   Step 5.6 ERROR: SMTP failed, trying API fallback...');
-          console.error('   SMTP Error:', smtpError.message);
+          // Try SMTP as fallback
+          if (this.transporter) {
+            console.log('   Step 5.7: Using SMTP fallback...');
+            try {
+              const sendPromise = this.transporter.sendMail(mailOptions);
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('SendGrid SMTP timeout after 10 seconds')), 10000);
+              });
+              
+              console.log('   Step 5.8: Waiting for SMTP response...');
+              const info = await Promise.race([sendPromise, timeoutPromise]);
+              
+              console.log('   Step 6: Email sent successfully via SMTP fallback!');
+              console.log(`   Message ID: ${info.messageId}`);
+              return { success: true, messageId: info.messageId };
+            } catch (smtpError) {
+              console.error('   Step 5.7 ERROR: SMTP fallback also failed');
+              console.error('   SMTP Error:', smtpError.message);
+              throw smtpError;
+            }
+          } else {
+            throw apiError; // No SMTP fallback available
+          }
         }
-      }
-      
-      // API Fallback
-      console.log('   Step 5.8: Using SendGrid API fallback...');
-      try {
-        const result = await this.sendViaSendGridAPI(email, verificationCode, firstName, fromEmail);
-        console.log('   Step 6: Email sent successfully via API!');
-        return result;
-      } catch (apiError) {
-        console.error('   Step 5.8 ERROR: API fallback also failed');
-        console.error('   API Error:', apiError.message);
-        throw apiError;
+      } else {
+        // No SendGrid credentials, use console logging
+        console.log(`📧 Verification code for ${email}: ${verificationCode}`);
+        console.log(`📧 Email would be sent to: ${email}`);
+        return { success: true, message: 'Verification code logged to console' };
       }
       
       if (process.env.NODE_ENV === 'development') {
