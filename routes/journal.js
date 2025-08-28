@@ -104,7 +104,7 @@ async function createJournalEntry(journalData, res) {
                 has_allergens, meals_per_day, hydration_level, bowel_frequency,
                 bristol_scale, urgency_level, blood_present, pain_location,
                 pain_severity, pain_time, medication_taken, medication_type,
-                dosage_level, sleep_hours, stress_level, fatigue_level, notes,
+                dosage_level, last_taken_date, sleep_hours, stress_level, fatigue_level, notes,
                 menstruation, breakfast, lunch, dinner, snacks,
                 breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
                 lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
@@ -112,8 +112,8 @@ async function createJournalEntry(journalData, res) {
                 snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-                    $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48)
+                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49)
             RETURNING entry_id;
         `;
         
@@ -138,35 +138,36 @@ async function createJournalEntry(journalData, res) {
             false,                     // $17 - medication_taken
             'None',                    // $18 - medication_type
             '0',                       // $19 - dosage_level
-            0,                         // $20 - sleep_hours
-            5,                         // $21 - stress_level
-            5,                         // $22 - fatigue_level
-            '',                        // $23 - notes
-            'not_applicable',          // $24 - menstruation
-            journalData.breakfast || '', // $25 - breakfast
-            journalData.lunch || '',     // $26 - lunch
-            journalData.dinner || '',    // $27 - dinner
-            journalData.snacks || '',    // $28 - snacks
-            Math.round(parseFloat(journalData.breakfast_calories) || 0), // $29 - breakfast_calories
-            Math.round(parseFloat(journalData.breakfast_protein) || 0),  // $30 - breakfast_protein
-            Math.round(parseFloat(journalData.breakfast_carbs) || 0),    // $31 - breakfast_carbs
-            Math.round(parseFloat(journalData.breakfast_fiber) || 0),    // $32 - breakfast_fiber
-            Math.round(parseFloat(journalData.breakfast_fat) || 0),      // $33 - breakfast_fat
-            Math.round(parseFloat(journalData.lunch_calories) || 0),     // $34 - lunch_calories
-            Math.round(parseFloat(journalData.lunch_protein) || 0),      // $35 - lunch_protein
-            Math.round(parseFloat(journalData.lunch_carbs) || 0),        // $36 - lunch_carbs
-            Math.round(parseFloat(journalData.lunch_fiber) || 0),        // $37 - lunch_fiber
-            Math.round(parseFloat(journalData.lunch_fat) || 0),          // $38 - lunch_fat
-            Math.round(parseFloat(journalData.dinner_calories) || 0),    // $39 - dinner_calories
-            Math.round(parseFloat(journalData.dinner_protein) || 0),     // $40 - dinner_protein
-            Math.round(parseFloat(journalData.dinner_carbs) || 0),       // $41 - dinner_carbs
-            Math.round(parseFloat(journalData.dinner_fiber) || 0),       // $42 - dinner_fiber
-            Math.round(parseFloat(journalData.dinner_fat) || 0),         // $43 - dinner_fat
-            Math.round(parseFloat(journalData.snack_calories) || 0),     // $44 - snack_calories
-            Math.round(parseFloat(journalData.snack_protein) || 0),      // $45 - snack_protein
-            Math.round(parseFloat(journalData.snack_carbs) || 0),        // $46 - snack_carbs
-            Math.round(parseFloat(journalData.snack_fiber) || 0),        // $47 - snack_fiber
-            Math.round(parseFloat(journalData.snack_fat) || 0)           // $48 - snack_fat
+            null,                      // $20 - last_taken_date
+            0,                         // $21 - sleep_hours
+            5,                         // $22 - stress_level
+            5,                         // $23 - fatigue_level
+            '',                        // $24 - notes
+            'not_applicable',          // $25 - menstruation
+            journalData.breakfast || '', // $26 - breakfast
+            journalData.lunch || '',     // $27 - lunch
+            journalData.dinner || '',    // $28 - dinner
+            journalData.snacks || '',    // $29 - snacks
+            Math.round(parseFloat(journalData.breakfast_calories) || 0), // $30 - breakfast_calories
+            Math.round(parseFloat(journalData.breakfast_protein) || 0),  // $31 - breakfast_protein
+            Math.round(parseFloat(journalData.breakfast_carbs) || 0),    // $32 - breakfast_carbs
+            Math.round(parseFloat(journalData.breakfast_fiber) || 0),    // $33 - breakfast_fiber
+            Math.round(parseFloat(journalData.breakfast_fat) || 0),      // $34 - breakfast_fat
+            Math.round(parseFloat(journalData.lunch_calories) || 0),     // $35 - lunch_calories
+            Math.round(parseFloat(journalData.lunch_protein) || 0),      // $36 - lunch_protein
+            Math.round(parseFloat(journalData.lunch_carbs) || 0),        // $37 - lunch_carbs
+            Math.round(parseFloat(journalData.lunch_fiber) || 0),        // $38 - lunch_fiber
+            Math.round(parseFloat(journalData.lunch_fat) || 0),          // $39 - lunch_fat
+            Math.round(parseFloat(journalData.dinner_calories) || 0),    // $40 - dinner_calories
+            Math.round(parseFloat(journalData.dinner_protein) || 0),     // $41 - dinner_protein
+            Math.round(parseFloat(journalData.dinner_carbs) || 0),       // $42 - dinner_carbs
+            Math.round(parseFloat(journalData.dinner_fiber) || 0),       // $43 - dinner_fiber
+            Math.round(parseFloat(journalData.dinner_fat) || 0),         // $44 - dinner_fat
+            Math.round(parseFloat(journalData.snack_calories) || 0),     // $45 - snack_calories
+            Math.round(parseFloat(journalData.snack_protein) || 0),      // $46 - snack_protein
+            Math.round(parseFloat(journalData.snack_carbs) || 0),        // $47 - snack_carbs
+            Math.round(parseFloat(journalData.snack_fiber) || 0),        // $48 - snack_fiber
+            Math.round(parseFloat(journalData.snack_fat) || 0)           // $49 - snack_fat
         ];
         
         console.log('🔍 Executing journal entry query with values:', values);
@@ -217,6 +218,7 @@ async function updateJournalEntry(entryId, journalData, res) {
         'medication_taken': journalData.medication_taken,
         'medication_type': journalData.medication_type,
         'dosage_level': journalData.dosage_level,
+        'last_taken_date': journalData.last_taken_date,
         'sleep_hours': journalData.sleep_hours,
         'stress_level': journalData.stress_level,
         'menstruation': journalData.menstruation,
