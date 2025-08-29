@@ -332,18 +332,32 @@ async function updateJournalEntry(entryId, journalData, res) {
     });
 }
 
-// GET /api/journal/entries/:username - Get journal entries for a user (optionally filtered by date)
+// GET /api/journal/entries/:username - Get journal entries for a user (optionally filtered by date or date range)
 router.get('/entries/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const { date } = req.query;
+        const { date, startDate, endDate } = req.query;
         
-        console.log('📅 Fetching entries for user:', username, 'date:', date);
+        console.log('📅 Fetching entries for user:', username, 'date:', date, 'startDate:', startDate, 'endDate:', endDate);
         
         let query;
         let queryParams;
         
-        if (date) {
+        if (startDate && endDate) {
+            // Date range query for trends
+            query = `
+                SELECT je.* FROM journal_entries je
+                JOIN users u ON je.user_id = u.user_id
+                WHERE u.email = $1 
+                AND je.entry_date >= $2 
+                AND je.entry_date <= $3
+                AND (je.notes IS NULL OR je.notes = '' OR je.notes != 'Generated entry with 7 symptoms')
+                ORDER BY je.entry_date ASC, je.created_at ASC
+            `;
+            queryParams = [username, startDate, endDate];
+            console.log('📊 Fetching entries for date range (trends):', startDate, 'to', endDate);
+        } else if (date) {
+            // Single date query (existing functionality)
             // Check if the requested date is today or in the future
             const today = new Date().toISOString().split('T')[0];
             const isTodayOrFuture = date >= today;
