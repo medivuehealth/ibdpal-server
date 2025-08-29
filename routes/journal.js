@@ -344,25 +344,44 @@ router.get('/entries/:username', async (req, res) => {
         let queryParams;
         
         if (date) {
-            // Filter by specific date
-            query = `
-                SELECT je.* FROM journal_entries je
-                JOIN users u ON je.user_id = u.user_id
-                WHERE u.email = $1 AND je.entry_date = $2
-                ORDER BY je.created_at DESC
-            `;
+            // Check if the requested date is today or in the future
+            const today = new Date().toISOString().split('T')[0];
+            const isTodayOrFuture = date >= today;
+            
+            if (isTodayOrFuture) {
+                // For today or future dates, only return entries that were actually created by the user
+                // Filter out auto-generated entries by checking if notes field is empty (auto-generated entries had notes)
+                query = `
+                    SELECT je.* FROM journal_entries je
+                    JOIN users u ON je.user_id = u.user_id
+                    WHERE u.email = $1 AND je.entry_date = $2 
+                    AND (je.notes IS NULL OR je.notes = '' OR je.notes != 'Generated entry with 7 symptoms')
+                    ORDER BY je.created_at DESC
+                `;
+                console.log('🔍 Filtering entries for today/future date, excluding auto-generated entries');
+            } else {
+                // For past dates, return all entries (including auto-generated ones for historical data)
+                query = `
+                    SELECT je.* FROM journal_entries je
+                    JOIN users u ON je.user_id = u.user_id
+                    WHERE u.email = $1 AND je.entry_date = $2
+                    ORDER BY je.created_at DESC
+                `;
+                console.log('🔍 Filtering entries by past date, including auto-generated entries');
+            }
             queryParams = [username, date];
-            console.log('🔍 Filtering entries by date:', date);
         } else {
-            // Get all entries for user
+            // Get all entries for user, but filter out auto-generated entries for today/future
+            const today = new Date().toISOString().split('T')[0];
             query = `
                 SELECT je.* FROM journal_entries je
                 JOIN users u ON je.user_id = u.user_id
                 WHERE u.email = $1 
+                AND (je.entry_date < $2 OR je.notes IS NULL OR je.notes = '' OR je.notes != 'Generated entry with 7 symptoms')
                 ORDER BY je.entry_date DESC, je.created_at DESC
             `;
-            queryParams = [username];
-            console.log('📋 Fetching all entries for user');
+            queryParams = [username, today];
+            console.log('📋 Fetching all entries for user, excluding auto-generated entries for today/future');
         }
         
         const result = await db.query(query, queryParams);
