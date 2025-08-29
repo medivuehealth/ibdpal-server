@@ -59,6 +59,16 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Diagnosis is required' });
         }
         
+        // Validate and parse last_gi_visit date
+        let parsedLastGiVisit = null;
+        if (lastGiVisit) {
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(lastGiVisit)) {
+                return res.status(400).json({ error: 'Invalid date format for last GI visit. Use YYYY-MM-DD format.' });
+            }
+            parsedLastGiVisit = lastGiVisit;
+        }
+        
         // Check if user already has a diagnosis record
         const existingResult = await db.query(
             'SELECT id FROM user_diagnosis WHERE username = $1',
@@ -107,7 +117,7 @@ router.post('/', authenticateToken, async (req, res) => {
                 isAnemic || null,
                 anemiaSeverity || null,
                 giSpecialistFrequency || null,
-                lastGiVisit || null,
+                parsedLastGiVisit || null,
                 familyHistory || null,
                 surgeryHistory || null,
                 hospitalizations || null,
@@ -158,7 +168,7 @@ router.post('/', authenticateToken, async (req, res) => {
                 isAnemic || null,
                 anemiaSeverity || null,
                 giSpecialistFrequency || null,
-                lastGiVisit || null,
+                parsedLastGiVisit || null,
                 familyHistory || null,
                 surgeryHistory || null,
                 hospitalizations || null,
