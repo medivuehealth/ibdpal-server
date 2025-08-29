@@ -400,7 +400,116 @@ router.get('/entries/:username', async (req, res) => {
         
         const result = await db.query(query, queryParams);
         console.log('✅ Found', result.rows.length, 'entries');
-        res.json(result.rows);
+        
+        // Transform flat data to structured format expected by iOS app
+        const transformedEntries = result.rows.map(entry => {
+            // Create meals array from individual meal data
+            const meals = [];
+            if (entry.breakfast) {
+                meals.push({
+                    meal_id: `breakfast_${entry.entry_id}`,
+                    meal_type: 'breakfast',
+                    description: entry.breakfast,
+                    calories: parseInt(entry.breakfast_calories) || 0,
+                    protein: parseInt(entry.breakfast_protein) || 0,
+                    carbs: parseInt(entry.breakfast_carbs) || 0,
+                    fiber: parseInt(entry.breakfast_fiber) || 0,
+                    fat: parseInt(entry.breakfast_fat) || 0
+                });
+            }
+            if (entry.lunch) {
+                meals.push({
+                    meal_id: `lunch_${entry.entry_id}`,
+                    meal_type: 'lunch',
+                    description: entry.lunch,
+                    calories: parseInt(entry.lunch_calories) || 0,
+                    protein: parseInt(entry.lunch_protein) || 0,
+                    carbs: parseInt(entry.lunch_carbs) || 0,
+                    fiber: parseInt(entry.lunch_fiber) || 0,
+                    fat: parseInt(entry.lunch_fat) || 0
+                });
+            }
+            if (entry.dinner) {
+                meals.push({
+                    meal_id: `dinner_${entry.entry_id}`,
+                    meal_type: 'dinner',
+                    description: entry.dinner,
+                    calories: parseInt(entry.dinner_calories) || 0,
+                    protein: parseInt(entry.dinner_protein) || 0,
+                    carbs: parseInt(entry.dinner_carbs) || 0,
+                    fiber: parseInt(entry.dinner_fiber) || 0,
+                    fat: parseInt(entry.dinner_fat) || 0
+                });
+            }
+            if (entry.snacks) {
+                meals.push({
+                    meal_id: `snack_${entry.entry_id}`,
+                    meal_type: 'snack',
+                    description: entry.snacks,
+                    calories: parseInt(entry.snack_calories) || 0,
+                    protein: parseInt(entry.snack_protein) || 0,
+                    carbs: parseInt(entry.snack_carbs) || 0,
+                    fiber: parseInt(entry.snack_fiber) || 0,
+                    fat: parseInt(entry.snack_fat) || 0
+                });
+            }
+            
+            // Create symptoms array from individual symptom data
+            const symptoms = [];
+            if (entry.pain_severity && entry.pain_severity > 0) {
+                symptoms.push({
+                    symptom_id: `pain_${entry.entry_id}`,
+                    type: 'pain',
+                    severity: entry.pain_severity,
+                    notes: entry.pain_location ? `Location: ${entry.pain_location}, Time: ${entry.pain_time || 'unknown'}` : null
+                });
+            }
+            if (entry.stress_level && entry.stress_level > 0) {
+                symptoms.push({
+                    symptom_id: `stress_${entry.entry_id}`,
+                    type: 'stress',
+                    severity: entry.stress_level,
+                    notes: null
+                });
+            }
+            if (entry.fatigue_level && entry.fatigue_level > 0) {
+                symptoms.push({
+                    symptom_id: `fatigue_${entry.entry_id}`,
+                    type: 'fatigue',
+                    severity: entry.fatigue_level,
+                    notes: null
+                });
+            }
+            
+            // Create bowel movements array
+            const bowel_movements = [];
+            if (entry.bowel_frequency && entry.bowel_frequency > 0) {
+                bowel_movements.push({
+                    movement_id: `bm_${entry.entry_id}`,
+                    time: entry.entry_date,
+                    consistency: entry.bristol_scale || 4,
+                    urgency: entry.urgency_level || null,
+                    blood_present: entry.blood_present || false,
+                    notes: null
+                });
+            }
+            
+            return {
+                entry_id: entry.entry_id.toString(),
+                user_id: entry.user_id,
+                entry_date: entry.entry_date,
+                meals: meals.length > 0 ? meals : null,
+                symptoms: symptoms.length > 0 ? symptoms : null,
+                bowel_movements: bowel_movements.length > 0 ? bowel_movements : null,
+                hydration: entry.hydration_level || null,
+                notes: entry.notes,
+                created_at: entry.created_at,
+                updated_at: entry.updated_at
+            };
+        });
+        
+        console.log('🔄 Transformed', transformedEntries.length, 'entries to structured format');
+        res.json(transformedEntries);
     } catch (error) {
         console.error('Error fetching journal entries:', error);
         res.status(500).json({ error: 'Failed to fetch journal entries', details: error.message });
