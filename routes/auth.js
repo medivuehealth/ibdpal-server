@@ -548,6 +548,150 @@ router.post('/verify-email', async (req, res) => {
   }
 });
 
+// Update user profile
+router.put('/users/profile', authenticateToken, async (req, res) => {
+  try {
+    const { first_name, last_name, phone_number } = req.body;
+    const userId = req.user.user_id;
+
+    // Validate input
+    if (!first_name || !last_name) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'First name and last name are required.'
+      });
+    }
+
+    if (first_name.trim().length === 0 || last_name.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'First name and last name cannot be empty.'
+      });
+    }
+
+    // Validate phone number if provided
+    if (phone_number && phone_number.trim().length > 0) {
+      const phoneRegex = /^\+?[\d\s\-\(\)]{10,20}$/;
+      if (!phoneRegex.test(phone_number.trim())) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Please enter a valid phone number.'
+        });
+      }
+    }
+
+    // Update user profile
+    const result = await db.query(
+      `UPDATE users 
+       SET first_name = $1, 
+           last_name = $2,
+           phone_number = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $4
+       RETURNING user_id, email, first_name, last_name, phone_number`,
+      [first_name.trim(), last_name.trim(), phone_number?.trim() || null, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User not found.'
+      });
+    }
+
+    const updatedUser = result.rows[0];
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser.user_id,
+        email: updatedUser.email,
+        firstName: updatedUser.first_name,
+        lastName: updatedUser.last_name,
+        phoneNumber: updatedUser.phone_number
+      }
+    });
+
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({
+      error: 'Update failed',
+      message: 'Unable to update profile. Please try again.'
+    });
+  }
+});
+
+// Change password
+router.put('/users/password', authenticateToken, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    const userId = req.user.user_id;
+
+    // Validate input
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'Current password and new password are required.'
+      });
+    }
+
+    if (new_password.length < 8) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'New password must be at least 8 characters long.'
+      });
+    }
+
+    // Get current user to verify current password
+    const userResult = await db.query(
+      'SELECT password_hash FROM users WHERE user_id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User not found.'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(current_password, user.password_hash);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        error: 'Invalid password',
+        message: 'Current password is incorrect.'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const newPasswordHash = await bcrypt.hash(new_password, saltRounds);
+
+    // Update password
+    await db.query(
+      `UPDATE users 
+       SET password_hash = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [newPasswordHash, userId]
+    );
+
+    res.json({
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({
+      error: 'Password change failed',
+      message: 'Unable to change password. Please try again.'
+    });
+  }
+});
+
 // Resend verification code
 router.post('/resend-verification', async (req, res) => {
   try {
