@@ -501,6 +501,7 @@ router.get('/entries/:username', async (req, res) => {
                 meals: meals.length > 0 ? meals : null,
                 symptoms: symptoms.length > 0 ? symptoms : null,
                 bowel_movements: bowel_movements.length > 0 ? bowel_movements : null,
+                bowel_frequency: entry.bowel_frequency || null,
                 hydration: entry.hydration_level || null,
                 notes: entry.notes,
                 created_at: entry.created_at,
