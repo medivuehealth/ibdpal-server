@@ -135,14 +135,14 @@ async function createJournalEntry(journalData, res) {
             'None',                    // $14 - pain_location
             0,                         // $15 - pain_severity
             'None',                    // $16 - pain_time
-            false,                     // $17 - medication_taken
-            'None',                    // $18 - medication_type
-            '0',                       // $19 - dosage_level
-            null,                      // $20 - last_taken_date
+            journalData.medication_taken || false, // $17 - medication_taken
+            journalData.medication_type || 'None', // $18 - medication_type
+            journalData.dosage_level || '0',       // $19 - dosage_level
+            journalData.last_taken_date || null,   // $20 - last_taken_date
             0,                         // $21 - sleep_hours
             5,                         // $22 - stress_level
             5,                         // $23 - fatigue_level
-            '',                        // $24 - notes
+            journalData.notes || '',   // $24 - notes
             'not_applicable',          // $25 - menstruation
             journalData.breakfast || '', // $26 - breakfast
             journalData.lunch || '',     // $27 - lunch
