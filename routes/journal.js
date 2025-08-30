@@ -509,6 +509,16 @@ router.get('/entries/:username', async (req, res) => {
                 urgency_level: entry.urgency_level || null,
                 bristol_scale: entry.bristol_scale || null,
                 hydration: entry.hydration_level || null,
+                // Medication fields
+                medication_taken: entry.medication_taken || null,
+                medication_type: entry.medication_type || null,
+                dosage_level: entry.dosage_level || null,
+                last_taken_date: entry.last_taken_date || null,
+                // Lifestyle fields
+                sleep_hours: entry.sleep_hours || null,
+                stress_level: entry.stress_level || null,
+                fatigue_level: entry.fatigue_level || null,
+                menstruation: entry.menstruation || null,
                 notes: entry.notes,
                 created_at: entry.created_at,
                 updated_at: entry.updated_at
@@ -1003,6 +1013,54 @@ router.get('/flare-risk/:userId', async (req, res) => {
             error: 'Failed to calculate flare risk',
             details: error.message 
         });
+    }
+});
+
+// GET /api/journal/latest-medication/:username - Get the most recent medication data for a user
+router.get('/latest-medication/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        
+        console.log('💊 Fetching latest medication data for user:', username);
+        
+        const query = `
+            SELECT 
+                medication_type,
+                dosage_level,
+                last_taken_date,
+                created_at
+            FROM journal_entries je
+            JOIN users u ON je.user_id = u.user_id
+            WHERE u.email = $1 
+            AND (medication_type IS NOT NULL AND medication_type != 'None')
+            ORDER BY je.created_at DESC
+            LIMIT 1
+        `;
+        
+        const result = await db.query(query, [username]);
+        
+        if (result.rows.length > 0) {
+            const latestMedication = result.rows[0];
+            console.log('💊 Found latest medication data:', latestMedication);
+            
+            res.json({
+                medication_type: latestMedication.medication_type,
+                dosage_level: latestMedication.dosage_level,
+                last_taken_date: latestMedication.last_taken_date,
+                created_at: latestMedication.created_at
+            });
+        } else {
+            console.log('💊 No previous medication data found');
+            res.json({
+                medication_type: 'None',
+                dosage_level: null,
+                last_taken_date: null,
+                created_at: null
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching latest medication data:', error);
+        res.status(500).json({ error: 'Failed to fetch latest medication data', details: error.message });
     }
 });
 
