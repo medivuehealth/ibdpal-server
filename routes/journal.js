@@ -1028,7 +1028,7 @@ router.get('/latest-medication/:username', async (req, res) => {
                 medication_type,
                 dosage_level,
                 last_taken_date,
-                created_at
+                je.created_at
             FROM journal_entries je
             JOIN users u ON je.user_id = u.user_id
             WHERE u.email = $1 
