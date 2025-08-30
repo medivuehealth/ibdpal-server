@@ -109,11 +109,14 @@ async function createJournalEntry(journalData, res) {
                 breakfast_calories, breakfast_protein, breakfast_carbs, breakfast_fiber, breakfast_fat,
                 lunch_calories, lunch_protein, lunch_carbs, lunch_fiber, lunch_fat,
                 dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
-                snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat
+                snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat,
+                stress_source, coping_strategies, mood_level, sleep_quality, sleep_notes,
+                water_intake, other_fluids, fluid_type
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49)
+                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49,
+                    $50, $51, $52, $53, $54, $55, $56, $57)
             RETURNING entry_id;
         `;
         
@@ -127,7 +130,7 @@ async function createJournalEntry(journalData, res) {
             Math.round(parseFloat(journalData.fiber) || 0),    // $6 - fiber
             false,                     // $7 - has_allergens
             4,                         // $8 - meals_per_day
-            5,                         // $9 - hydration_level
+            journalData.hydration_level || 5, // $9 - hydration_level
             0,                         // $10 - bowel_frequency
             4,                         // $11 - bristol_scale
             0,                         // $12 - urgency_level
@@ -139,9 +142,9 @@ async function createJournalEntry(journalData, res) {
             journalData.medication_type || 'None', // $18 - medication_type
             journalData.dosage_level || '0',       // $19 - dosage_level
             journalData.last_taken_date || null,   // $20 - last_taken_date
-            0,                         // $21 - sleep_hours
-            5,                         // $22 - stress_level
-            5,                         // $23 - fatigue_level
+            journalData.sleep_hours || 0,          // $21 - sleep_hours
+            journalData.stress_level || 5,         // $22 - stress_level
+            journalData.fatigue_level || 5,        // $23 - fatigue_level
             journalData.notes || '',   // $24 - notes
             'not_applicable',          // $25 - menstruation
             journalData.breakfast || '', // $26 - breakfast
@@ -167,7 +170,15 @@ async function createJournalEntry(journalData, res) {
             Math.round(parseFloat(journalData.snack_protein) || 0),      // $46 - snack_protein
             Math.round(parseFloat(journalData.snack_carbs) || 0),        // $47 - snack_carbs
             Math.round(parseFloat(journalData.snack_fiber) || 0),        // $48 - snack_fiber
-            Math.round(parseFloat(journalData.snack_fat) || 0)           // $49 - snack_fat
+            Math.round(parseFloat(journalData.snack_fat) || 0),          // $49 - snack_fat
+            journalData.stress_source || '',       // $50 - stress_source
+            journalData.coping_strategies || '',   // $51 - coping_strategies
+            journalData.mood_level || 5,           // $52 - mood_level
+            journalData.sleep_quality || 5,        // $53 - sleep_quality
+            journalData.sleep_notes || '',         // $54 - sleep_notes
+            parseFloat(journalData.water_intake) || 0, // $55 - water_intake
+            parseFloat(journalData.other_fluids) || 0, // $56 - other_fluids
+            journalData.fluid_type || 'Water'      // $57 - fluid_type
         ];
         
         console.log('🔍 Executing journal entry query with values:', values);
@@ -248,7 +259,18 @@ async function updateJournalEntry(entryId, journalData, res) {
         'snack_protein': journalData.snack_protein,
         'snack_carbs': journalData.snack_carbs,
         'snack_fiber': journalData.snack_fiber,
-        'snack_fat': journalData.snack_fat
+        'snack_fat': journalData.snack_fat,
+        // Stress-related fields
+        'stress_source': journalData.stress_source,
+        'coping_strategies': journalData.coping_strategies,
+        'mood_level': journalData.mood_level,
+        // Sleep-related fields
+        'sleep_quality': journalData.sleep_quality,
+        'sleep_notes': journalData.sleep_notes,
+        // Hydration-related fields
+        'water_intake': journalData.water_intake,
+        'other_fluids': journalData.other_fluids,
+        'fluid_type': journalData.fluid_type
     };
 
     Object.entries(fieldsToUpdate).forEach(([field, value]) => {
@@ -519,6 +541,17 @@ router.get('/entries/:username', async (req, res) => {
                 stress_level: entry.stress_level || null,
                 fatigue_level: entry.fatigue_level || null,
                 menstruation: entry.menstruation || null,
+                // Stress-related fields
+                stress_source: entry.stress_source || null,
+                coping_strategies: entry.coping_strategies || null,
+                mood_level: entry.mood_level || null,
+                // Sleep-related fields
+                sleep_quality: entry.sleep_quality || null,
+                sleep_notes: entry.sleep_notes || null,
+                // Hydration-related fields
+                water_intake: entry.water_intake || null,
+                other_fluids: entry.other_fluids || null,
+                fluid_type: entry.fluid_type || null,
                 notes: entry.notes,
                 created_at: entry.created_at,
                 updated_at: entry.updated_at
@@ -601,7 +634,18 @@ router.put('/entries/:entryId', async (req, res) => {
             'snack_protein': journalData.snack_protein,
             'snack_carbs': journalData.snack_carbs,
             'snack_fiber': journalData.snack_fiber,
-            'snack_fat': journalData.snack_fat
+            'snack_fat': journalData.snack_fat,
+            // Stress-related fields
+            'stress_source': journalData.stress_source,
+            'coping_strategies': journalData.coping_strategies,
+            'mood_level': journalData.mood_level,
+            // Sleep-related fields
+            'sleep_quality': journalData.sleep_quality,
+            'sleep_notes': journalData.sleep_notes,
+            // Hydration-related fields
+            'water_intake': journalData.water_intake,
+            'other_fluids': journalData.other_fluids,
+            'fluid_type': journalData.fluid_type
         };
 
         Object.entries(fieldsToUpdate).forEach(([field, value]) => {
