@@ -281,6 +281,12 @@ async function updateJournalEntry(entryId, journalData, res) {
             if (field === 'bristol_scale') {
                 // Bristol scale must be 1-7, default to 4 if 0 or invalid
                 updateValues.push((value && value >= 1 && value <= 7) ? value : 4);
+            } else if (field === 'stress_level') {
+                // Stress level must be 1-5, default to 3 if invalid
+                updateValues.push((value && value >= 1 && value <= 5) ? value : 3);
+            } else if (field === 'mood_level') {
+                // Mood level must be 1-5, default to 3 if invalid
+                updateValues.push((value && value >= 1 && value <= 5) ? value : 3);
             } else if (field === 'menstruation') {
                 // Ensure valid menstruation value
                 updateValues.push(value || 'not_applicable');
@@ -296,13 +302,12 @@ async function updateJournalEntry(entryId, journalData, res) {
             } else if (field === 'dosage_level') {
                 // Dosage level must be text and match medication type constraints
                 let validDosage = '0'; // default for 'None' medication type
-                const medicationType = journalData.medication_type || 'None';
                 
-                if (medicationType === 'biologic') {
+                if (journalData.medication_type === 'biologic') {
                     validDosage = (value && ['every_2_weeks', 'every_4_weeks', 'every_8_weeks'].includes(value)) ? value : 'every_4_weeks';
-                } else if (medicationType === 'immunosuppressant') {
+                } else if (journalData.medication_type === 'immunosuppressant') {
                     validDosage = (value && ['daily', 'twice_daily', 'weekly'].includes(value)) ? value : 'daily';
-                } else if (medicationType === 'steroid') {
+                } else if (journalData.medication_type === 'steroid') {
                     validDosage = (value && ['5', '10', '20'].includes(value)) ? value : '5';
                 } else {
                     // For 'None' or any other medication type, use '0'
@@ -656,6 +661,12 @@ router.put('/entries/:entryId', async (req, res) => {
                 if (field === 'bristol_scale') {
                     // Bristol scale must be 1-7, default to 4 if 0 or invalid
                     updateValues.push((value && value >= 1 && value <= 7) ? value : 4);
+                } else if (field === 'stress_level') {
+                    // Stress level must be 1-5, default to 3 if invalid
+                    updateValues.push((value && value >= 1 && value <= 5) ? value : 3);
+                } else if (field === 'mood_level') {
+                    // Mood level must be 1-5, default to 3 if invalid
+                    updateValues.push((value && value >= 1 && value <= 5) ? value : 3);
                 } else if (field === 'menstruation') {
                     // Ensure valid menstruation value
                     updateValues.push(value || 'not_applicable');
