@@ -13,6 +13,7 @@ const diagnosisRoutes = require('./routes/diagnosis');
 const blogRoutes = require('./routes/blogs');
 const discoveryRoutes = require('./routes/discovery');
 const reminderRoutes = require('./routes/reminders');
+const feedbackRoutes = require('./routes/feedback');
 
 const app = express();
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3004;
@@ -114,6 +115,7 @@ app.use('/api/diagnosis', diagnosisRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/discovery', discoveryRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
