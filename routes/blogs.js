@@ -346,10 +346,12 @@ router.delete('/stories/:id', authenticateToken, async (req, res) => {
 router.post('/stories/:id/like', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const username = req.user.email;
+        const username = req.user.email || req.user.id;
+        
+        console.log('Like/unlike story request:', { storyId: id, username });
 
         // Check if story exists
-        const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND is_published = true';
+        const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1';
         const storyResult = await db.query(storyQuery, [id]);
 
         if (storyResult.rows.length === 0) {
@@ -360,53 +362,60 @@ router.post('/stories/:id/like', authenticateToken, async (req, res) => {
         }
 
         // Check if user already liked the story
-        const likeQuery = 'SELECT * FROM blog_story_likes WHERE story_id = $1 AND username = $2';
-        const likeResult = await db.query(likeQuery, [id, userId]);
+        const existingLikeQuery = 'SELECT * FROM blog_story_likes WHERE story_id = $1 AND username = $2';
+        const existingLikeResult = await db.query(existingLikeQuery, [id, username]);
 
-        if (likeResult.rows.length > 0) {
-            // Unlike
-            await db.query('DELETE FROM blog_story_likes WHERE story_id = $1 AND username = $2', [id, userId]);
+        if (existingLikeResult.rows.length > 0) {
+            // Unlike the story
+            await db.query('DELETE FROM blog_story_likes WHERE story_id = $1 AND username = $2', [id, username]);
+            
+            // Update story likes count
+            await db.query('UPDATE blog_stories SET likes = likes - 1 WHERE id = $1', [id]);
+            
+            console.log('Story unliked successfully');
+            
             res.json({
                 success: true,
-                message: 'Story unliked',
+                message: 'Story unliked successfully',
                 liked: false
             });
         } else {
-            // Like
-            await db.query('INSERT INTO blog_story_likes (story_id, username) VALUES ($1, $2)', [id, userId]);
+            // Like the story
+            await db.query('INSERT INTO blog_story_likes (story_id, username) VALUES ($1, $2)', [id, username]);
+            
+            // Update story likes count
+            await db.query('UPDATE blog_stories SET likes = likes + 1 WHERE id = $1', [id]);
+            
+            console.log('Story liked successfully');
+            
             res.json({
                 success: true,
-                message: 'Story liked',
+                message: 'Story liked successfully',
                 liked: true
             });
         }
 
     } catch (error) {
-        console.error('Error toggling story like:', error);
+        console.error('Error liking/unliking story:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to toggle like',
+            message: 'Failed to like/unlike story',
             error: error.message
         });
     }
 });
 
-// POST /api/blogs/stories/:id/comments - Add a comment to a story
-router.post('/stories/:id/comments', authenticateToken, async (req, res) => {
+// GET /api/blogs/stories/:id/comments - Get comments for a story
+router.get('/stories/:id/comments', async (req, res) => {
     try {
         const { id } = req.params;
-        const { content, isAnonymous = false } = req.body;
-        const username = req.user.email;
+        const { page = 1, limit = 20 } = req.query;
+        const offset = (page - 1) * limit;
 
-        if (!content) {
-            return res.status(400).json({
-                success: false,
-                message: 'Comment content is required'
-            });
-        }
+        console.log('Getting comments for story:', id);
 
         // Check if story exists
-        const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1 AND is_published = true';
+        const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1';
         const storyResult = await db.query(storyQuery, [id]);
 
         if (storyResult.rows.length === 0) {
@@ -416,28 +425,120 @@ router.post('/stories/:id/comments', authenticateToken, async (req, res) => {
             });
         }
 
-        // Get user info
-        const userQuery = 'SELECT name FROM users WHERE id = $1';
-        const userResult = await db.query(userQuery, [userId]);
-        const user = userResult.rows[0];
+        // Get comments
+        const commentsQuery = `
+            SELECT 
+                bsc.*,
+                CASE WHEN bsc.username = bs.username THEN true ELSE false END as is_author
+            FROM blog_story_comments bsc
+            JOIN blog_stories bs ON bsc.story_id = bs.id
+            WHERE bsc.story_id = $1
+            ORDER BY bsc.created_at ASC
+            LIMIT $2 OFFSET $3
+        `;
 
-        // Create comment
-        const commentQuery = `
-            INSERT INTO blog_comments (story_id, username, user_name, content, is_anonymous)
-            VALUES ($1, $2, $3, $4, $5)
+        const commentsResult = await db.query(commentsQuery, [id, limit, offset]);
+        const comments = commentsResult.rows;
+
+        // Get total count
+        const countQuery = 'SELECT COUNT(*) as total FROM blog_story_comments WHERE story_id = $1';
+        const countResult = await db.query(countQuery, [id]);
+        const total = parseInt(countResult.rows[0].total);
+
+        console.log(`Found ${comments.length} comments for story ${id}`);
+
+        res.json({
+            success: true,
+            data: {
+                comments,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching comments:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch comments',
+            error: error.message
+        });
+    }
+});
+
+// POST /api/blogs/stories/:id/comments - Add a comment to a story
+router.post('/stories/:id/comments', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { content } = req.body;
+        const username = req.user.email || req.user.id;
+        
+        console.log('Adding comment to story:', { storyId: id, username, content: content ? `${content.substring(0, 50)}...` : 'empty' });
+
+        // Validation
+        if (!content || content.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment content is required'
+            });
+        }
+
+        if (content.trim().length > 1000) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment is too long (max 1000 characters)'
+            });
+        }
+
+        // Check if story exists
+        const storyQuery = 'SELECT * FROM blog_stories WHERE id = $1';
+        const storyResult = await db.query(storyQuery, [id]);
+
+        if (storyResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Story not found'
+            });
+        }
+
+        // Add comment
+        const insertQuery = `
+            INSERT INTO blog_story_comments (story_id, username, content)
+            VALUES ($1, $2, $3)
             RETURNING *
         `;
 
-        const commentResult = await db.query(commentQuery, [
-            id, userId, isAnonymous ? 'Anonymous' : user.name, content, isAnonymous
-        ]);
+        const result = await db.query(insertQuery, [id, username, content.trim()]);
+        const newComment = result.rows[0];
 
-        const comment = commentResult.rows[0];
+        // Update story comments count
+        await db.query('UPDATE blog_stories SET comments_count = comments_count + 1 WHERE id = $1', [id]);
+
+        // Get the comment with author info
+        const commentWithAuthorQuery = `
+            SELECT 
+                bsc.*,
+                CASE WHEN bsc.username = bs.username THEN true ELSE false END as is_author
+            FROM blog_story_comments bsc
+            JOIN blog_stories bs ON bsc.story_id = bs.id
+            WHERE bsc.id = $1
+        `;
+
+        const commentResult = await db.query(commentWithAuthorQuery, [newComment.id]);
+        const commentWithAuthor = commentResult.rows[0];
+
+        console.log('Comment added successfully:', newComment.id);
 
         res.status(201).json({
             success: true,
             message: 'Comment added successfully',
-            data: comment
+            data: {
+                comment: commentWithAuthor
+            }
         });
 
     } catch (error) {
