@@ -639,4 +639,84 @@ router.post('/stories/:id/report', authenticateToken, async (req, res) => {
     }
 });
 
+// POST /api/blogs - Create a new story
+router.post('/', authenticateToken, async (req, res) => {
+    try {
+        const { title, content, disease_type, tags } = req.body;
+        const username = req.user.email;
+
+        // Validation
+        if (!title || !content || !disease_type) {
+            return res.status(400).json({
+                success: false,
+                message: 'Title, content, and disease type are required'
+            });
+        }
+
+        if (title.trim().length < 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Title must be at least 5 characters long'
+            });
+        }
+
+        if (content.trim().length < 50) {
+            return res.status(400).json({
+                success: false,
+                message: 'Story content must be at least 50 characters long'
+            });
+        }
+
+        // Validate disease type
+        const validDiseaseTypes = ['crohns', 'ulcerative_colitis', 'indeterminate'];
+        if (!validDiseaseTypes.includes(disease_type)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid disease type'
+            });
+        }
+
+        // Create the story
+        const insertQuery = `
+            INSERT INTO blog_stories (
+                username, 
+                title, 
+                content, 
+                disease_type, 
+                tags, 
+                is_published,
+                created_at,
+                updated_at
+            ) VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+            RETURNING *
+        `;
+
+        const result = await db.query(insertQuery, [
+            username,
+            title.trim(),
+            content.trim(),
+            disease_type,
+            tags || []
+        ]);
+
+        const newStory = result.rows[0];
+
+        res.status(201).json({
+            success: true,
+            message: 'Story created successfully',
+            data: {
+                story: newStory
+            }
+        });
+
+    } catch (error) {
+        console.error('Error creating story:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create story',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router; 
