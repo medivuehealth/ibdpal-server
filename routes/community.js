@@ -6,7 +6,7 @@ const db = require('../database/db');
 // GET /api/community/hospitals - Get nearby hospitals and medical centers
 router.get('/hospitals', async (req, res) => {
     try {
-        const { latitude, longitude, radius = 50, limit = 20 } = req.query;
+        const { latitude, longitude, radius = 32.2, limit = 20 } = req.query; // 20 miles = 32.2 km
         
         console.log('Getting nearby hospitals:', { latitude, longitude, radius, limit });
 
@@ -115,7 +115,7 @@ router.get('/hospitals/:id', async (req, res) => {
 // GET /api/community/specialists - Get IBD specialists near user
 router.get('/specialists', async (req, res) => {
     try {
-        const { latitude, longitude, radius = 50, limit = 20 } = req.query;
+        const { latitude, longitude, radius = 32.2, limit = 20 } = req.query; // 20 miles = 32.2 km
         
         console.log('Getting nearby IBD specialists:', { latitude, longitude, radius, limit });
 
