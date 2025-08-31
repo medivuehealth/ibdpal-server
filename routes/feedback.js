@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Database connection
 const pool = new Pool({
@@ -10,7 +10,7 @@ const pool = new Pool({
 });
 
 // POST /api/feedback - Submit user feedback
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     
     try {
@@ -101,7 +101,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // GET /api/feedback - Get user's feedback
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     
     try {
@@ -135,7 +135,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // PUT /api/feedback/:feedbackId - Update existing feedback
-router.put('/:feedbackId', auth, async (req, res) => {
+router.put('/:feedbackId', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     
     try {
@@ -226,7 +226,7 @@ router.put('/:feedbackId', auth, async (req, res) => {
 });
 
 // GET /api/feedback/stats - Get feedback statistics (admin only)
-router.get('/stats', auth, async (req, res) => {
+router.get('/stats', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     
     try {
