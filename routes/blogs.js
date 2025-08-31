@@ -643,7 +643,18 @@ router.post('/stories/:id/report', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
     try {
         const { title, content, disease_type, tags } = req.body;
-        const username = req.user.email;
+        
+        // Use email if available, otherwise use id
+        const username = req.user.email || req.user.id;
+        
+        console.log('Creating story with data:', {
+            title,
+            content: content ? `${content.substring(0, 50)}...` : 'empty',
+            disease_type,
+            tags,
+            username,
+            userData: req.user
+        });
 
         // Validation
         if (!title || !content || !disease_type) {
@@ -676,6 +687,11 @@ router.post('/', authenticateToken, async (req, res) => {
             });
         }
 
+        // Ensure tags is an array
+        const tagsArray = Array.isArray(tags) ? tags : [];
+
+        console.log('About to insert story with username:', username);
+
         // Create the story
         const insertQuery = `
             INSERT INTO blog_stories (
@@ -696,10 +712,11 @@ router.post('/', authenticateToken, async (req, res) => {
             title.trim(),
             content.trim(),
             disease_type,
-            tags || []
+            tagsArray
         ]);
 
         const newStory = result.rows[0];
+        console.log('Story created successfully:', newStory.id);
 
         res.status(201).json({
             success: true,
@@ -711,6 +728,11 @@ router.post('/', authenticateToken, async (req, res) => {
 
     } catch (error) {
         console.error('Error creating story:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            userData: req.user
+        });
         res.status(500).json({
             success: false,
             message: 'Failed to create story',
