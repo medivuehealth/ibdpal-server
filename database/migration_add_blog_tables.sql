@@ -1,10 +1,10 @@
 -- Migration: Add blog tables for story sharing functionality
 -- This migration creates the necessary tables for the blog/story sharing feature
 
--- Create blog_stories table
+-- Create blog_stories table first (no dependencies)
 CREATE TABLE IF NOT EXISTS blog_stories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    username VARCHAR(255) NOT NULL,
     title VARCHAR(500) NOT NULL,
     content TEXT NOT NULL,
     disease_type VARCHAR(50) NOT NULL CHECK (disease_type IN ('crohns', 'ulcerative_colitis', 'indeterminate')),
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS blog_stories (
 -- Create blog_story_likes table for tracking user likes
 CREATE TABLE IF NOT EXISTS blog_story_likes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    story_id UUID NOT NULL REFERENCES blog_stories(id) ON DELETE CASCADE,
-    username VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    story_id UUID NOT NULL,
+    username VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(story_id, username)
 );
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS blog_story_likes (
 -- Create blog_story_comments table
 CREATE TABLE IF NOT EXISTS blog_story_comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    story_id UUID NOT NULL REFERENCES blog_stories(id) ON DELETE CASCADE,
-    username VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    story_id UUID NOT NULL,
+    username VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     likes INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS blog_story_comments (
 -- Create blog_story_reports table for content moderation
 CREATE TABLE IF NOT EXISTS blog_story_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    story_id UUID NOT NULL REFERENCES blog_stories(id) ON DELETE CASCADE,
-    reporter_username VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    story_id UUID NOT NULL,
+    reporter_username VARCHAR(255) NOT NULL,
     reason VARCHAR(100) NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'medical_advice', 'other')),
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -77,7 +77,8 @@ CREATE TRIGGER update_blog_story_comments_updated_at
 -- Add some sample data for testing
 INSERT INTO blog_stories (username, title, content, disease_type, tags) VALUES
 ('test@example.com', 'My Journey with Crohn''s Disease', 'This is a sample story about living with Crohn''s disease...', 'crohns', ARRAY['journey', 'crohns', 'support']),
-('test@example.com', 'Managing UC Symptoms', 'Here are some tips that helped me manage my ulcerative colitis symptoms...', 'ulcerative_colitis', ARRAY['tips', 'symptoms', 'management']);
+('test@example.com', 'Managing UC Symptoms', 'Here are some tips that helped me manage my ulcerative colitis symptoms...', 'ulcerative_colitis', ARRAY['tips', 'symptoms', 'management'])
+ON CONFLICT DO NOTHING;
 
 -- Update the likes and comments counts based on actual data
 UPDATE blog_stories SET 

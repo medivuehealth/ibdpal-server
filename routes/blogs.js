@@ -696,6 +696,8 @@ router.post('/', authenticateToken, async (req, res) => {
         const insertQuery = `
             INSERT INTO blog_stories (
                 username, 
+                user_name,
+                user_age,
                 title, 
                 content, 
                 disease_type, 
@@ -703,12 +705,14 @@ router.post('/', authenticateToken, async (req, res) => {
                 is_published,
                 created_at,
                 updated_at
-            ) VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW())
             RETURNING *
         `;
 
         const result = await db.query(insertQuery, [
             username,
+            username, // Use username as user_name for now
+            25, // Default age
             title.trim(),
             content.trim(),
             disease_type,
