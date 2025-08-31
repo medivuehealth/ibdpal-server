@@ -361,6 +361,16 @@ router.post('/stories/:id/like', authenticateToken, async (req, res) => {
             });
         }
 
+        const story = storyResult.rows[0];
+        
+        // Prevent story author from liking their own story
+        if (story.username === username) {
+            return res.status(400).json({
+                success: false,
+                message: 'You cannot like your own story'
+            });
+        }
+
         // Check if user already liked the story
         const existingLikeQuery = 'SELECT * FROM blog_story_likes WHERE story_id = $1 AND username = $2';
         const existingLikeResult = await db.query(existingLikeQuery, [id, username]);
