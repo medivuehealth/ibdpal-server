@@ -197,52 +197,31 @@ router.get('/nutrition-articles', async (req, res) => {
         console.log('Getting nutrition articles:', { category, limit, featured });
 
         let query = `
+        let query = `
             SELECT id, title, excerpt, content, category, source, source_url, 
                    read_time_minutes, is_public, is_featured, view_count, 
-                   tags, published_date, created_at
+                   tags, published_date, created_at 
             FROM nutrition_articles 
-            WHERE is_public = TRUE
-            ORDER BY view_count DESC, published_date DESC
-            LIMIT $1
-        `;
+            WHERE is_public = TRUE 
+        `; 
         
-        const queryParams = [parseInt(limit)];
-
-        if (category) {
-            query = `
-                SELECT id, title, excerpt, content, category, source, source_url, 
-                       read_time_minutes, is_public, is_featured, view_count, 
-                       tags, published_date, created_at
-                FROM nutrition_articles 
-                WHERE is_public = TRUE AND category = $1
-                ORDER BY view_count DESC, published_date DESC
-                LIMIT $2
-            `;
-            queryParams[0] = category;
-            queryParams[1] = parseInt(limit);
-        }
-
-        if (featured === 'true') {
-            query = `
-                SELECT id, title, excerpt, content, category, source, source_url, 
-                       read_time_minutes, is_public, is_featured, view_count, 
-                       tags, published_date, created_at
-                FROM nutrition_articles 
-                WHERE is_public = TRUE AND is_featured = TRUE
-                ORDER BY view_count DESC, published_date DESC
-                LIMIT $1
-            `;
-            queryParams[0] = parseInt(limit);
-        }
-
-        const result = await db.query(query, queryParams);
-        const articles = result.rows;
-
-        console.log(`Found ${articles.length} nutrition articles`);
-
-        res.json({
-            success: true,
-            data: {
+        const queryParams = []; 
+        let paramCount = 0; 
+        
+        if (category) { 
+            paramCount++; 
+            query += ` AND category = $${paramCount}`; 
+            queryParams.push(category); 
+        } 
+        
+        if (featured === "true") { 
+            paramCount++; 
+            query += ` AND is_featured = $${paramCount}`; 
+            queryParams.push(true); 
+        } 
+        
+        query += ` ORDER BY view_count DESC, published_date DESC LIMIT $${paramCount + 1}`; 
+        queryParams.push(parseInt(limit)); 
                 articles,
                 total: articles.length,
                 filters: { category, limit, featured },
