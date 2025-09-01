@@ -7,7 +7,7 @@ const webSearchService = require('../services/webSearchService');
 // GET /api/community/hospitals - Get nearby hospitals and medical centers via web search
 router.get('/hospitals', async (req, res) => {
     try {
-        const { latitude, longitude, radius = 48.3, limit = 20 } = req.query; // 30 miles = 48.3 km
+        const { latitude, longitude, radius = 80.5, limit = 20 } = req.query; // 50 miles = 80.5 km
         
         console.log('Getting nearby hospitals via web search:', { latitude, longitude, radius, limit });
 
@@ -62,7 +62,7 @@ router.get('/hospitals', async (req, res) => {
 // GET /api/community/specialists - Get IBD specialists via web search
 router.get('/specialists', async (req, res) => {
     try {
-        const { latitude, longitude, radius = 48.3, limit = 20 } = req.query; // 30 miles = 48.3 km
+        const { latitude, longitude, radius = 80.5, limit = 20 } = req.query; // 50 miles = 80.5 km
         
         console.log('Getting nearby IBD specialists via web search:', { latitude, longitude, radius, limit });
 
@@ -117,7 +117,7 @@ router.get('/specialists', async (req, res) => {
 // GET /api/community/support-organizations - Get IBD support organizations from database
 router.get('/support-organizations', async (req, res) => {
     try {
-        const { latitude, longitude, radius = 48.3, limit = 20 } = req.query; // 30 miles = 48.3 km
+        const { latitude, longitude, radius = 80.5, limit = 20 } = req.query; // 50 miles = 80.5 km
         
         console.log('Getting nearby IBD support organizations:', { latitude, longitude, radius, limit });
 
