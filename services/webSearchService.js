@@ -76,11 +76,14 @@ class WebSearchService {
     // Alternative search method using existing API keys
     async searchWithAlternativeMethods(latitude, longitude, radius, type) {
         console.log(`🔍 WebSearch: Using alternative search for ${type}s`);
+        console.log(`🔍 WebSearch: No Google Places API key available, using enhanced fallback data`);
         
         // For now, return enhanced fallback data with more realistic information
         if (type === 'hospital') {
+            console.log('🔍 WebSearch: Returning enhanced fallback hospitals');
             return this.getEnhancedFallbackHospitals(latitude, longitude);
         } else {
+            console.log('🔍 WebSearch: Returning enhanced fallback specialists');
             return this.getEnhancedFallbackSpecialists(latitude, longitude);
         }
     }
@@ -238,6 +241,7 @@ class WebSearchService {
     // Enhanced fallback data with more realistic information
     getEnhancedFallbackHospitals(latitude, longitude) {
         console.log('🔍 WebSearch: Using enhanced fallback hospital data');
+        console.log('🔍 WebSearch: Returning 2 realistic Charlotte hospitals');
         return [
             {
                 id: 'fallback-1',
@@ -286,6 +290,7 @@ class WebSearchService {
 
     getEnhancedFallbackSpecialists(latitude, longitude) {
         console.log('🔍 WebSearch: Using enhanced fallback specialist data');
+        console.log('🔍 WebSearch: Returning 2 realistic Charlotte specialists');
         return [
             {
                 id: 'fallback-spec-1',
