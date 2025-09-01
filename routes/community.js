@@ -190,3 +190,117 @@ router.get('/support-organizations', async (req, res) => {
 });
 module.exports = router;
 // FORCE RAILWAY REDEPLOY - Mon Sep  1 18:14:38 EDT 2025
+
+
+// GET /api/community/nutrition-articles - Get nutrition articles from database
+router.get('/nutrition-articles', async (req, res) => {
+    try {
+        const { category, limit = 20, featured = false } = req.query;
+        
+        console.log('Getting nutrition articles:', { category, limit, featured });
+
+        let query = `
+            SELECT id, title, excerpt, content, category, source, source_url, 
+                   read_time_minutes, is_public, is_featured, view_count, 
+                   tags, published_date, created_at
+            FROM nutrition_articles 
+            WHERE is_public = TRUE
+        `;
+        
+        const queryParams = [];
+        let paramCount = 0;
+
+        if (category) {
+            paramCount++;
+            query += ` AND category = $${paramCount}`;
+            queryParams.push(category);
+        }
+
+        if (featured === 'true') {
+            paramCount++;
+            query += ` AND is_featured = $${paramCount}`;
+            queryParams.push(true);
+        }
+
+        query += ` ORDER BY view_count DESC, published_date DESC LIMIT $${paramCount + 1}`;
+        queryParams.push(parseInt(limit));
+
+        const result = await db.query(query, queryParams);
+        const articles = result.rows;
+
+        console.log(`Found ${articles.length} nutrition articles`);
+
+        res.json({
+            success: true,
+            data: {
+                articles,
+                total: articles.length,
+                filters: { category, limit, featured },
+                source: 'database'
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching nutrition articles:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch nutrition articles',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/community/nutrition-articles/:id - Get specific nutrition article and increment view count
+router.get('/nutrition-articles/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log('Getting nutrition article by ID:', id);
+
+        // Get the article
+        const articleResult = await db.query(`
+            SELECT id, title, excerpt, content, category, source, source_url, 
+                   read_time_minutes, is_public, is_featured, view_count, 
+                   tags, published_date, created_at
+            FROM nutrition_articles 
+            WHERE id = $1 AND is_public = TRUE
+        `, [id]);
+
+        if (articleResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Article not found'
+            });
+        }
+
+        const article = articleResult.rows[0];
+
+        // Increment view count
+        await db.query(`
+            UPDATE nutrition_articles 
+            SET view_count = view_count + 1, 
+                updated_at = CURRENT_TIMESTAMP 
+            WHERE id = $1
+        `, [id]);
+
+        console.log(`Article "${article.title}" viewed, view count incremented`);
+
+        res.json({
+            success: true,
+            data: {
+                article,
+                source: 'database'
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching nutrition article:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch nutrition article',
+            error: error.message
+        });
+    }
+});
+
+module.exports = router;
