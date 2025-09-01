@@ -246,7 +246,7 @@ class WebSearchService {
         console.log('🔍 WebSearch: Returning 2 realistic Charlotte hospitals');
         return [
             {
-                id: 'fallback-1',
+                id: 'atrium-health-1',
                 name: 'Atrium Health Carolinas Medical Center',
                 type: 'hospital',
                 address: '1000 Blythe Blvd, Charlotte, NC 28203',
@@ -267,7 +267,7 @@ class WebSearchService {
                 updated_at: new Date().toISOString()
             },
             {
-                id: 'fallback-2',
+                id: 'novant-health-2',
                 name: 'Novant Health Presbyterian Medical Center',
                 type: 'hospital',
                 address: '200 Hawthorne Ln, Charlotte, NC 28204',
@@ -295,7 +295,7 @@ class WebSearchService {
         console.log('🔍 WebSearch: Returning 2 realistic Charlotte specialists');
         return [
             {
-                id: 'fallback-spec-1',
+                id: 'dr-sarah-johnson-1',
                 name: 'Dr. Sarah Johnson',
                 type: 'specialist',
                 address: '123 Medical Center Dr, Charlotte, NC 28207',
@@ -315,7 +315,7 @@ class WebSearchService {
                 updated_at: new Date().toISOString()
             },
             {
-                id: 'fallback-spec-2',
+                id: 'dr-michael-chen-2',
                 name: 'Dr. Michael Chen',
                 type: 'specialist',
                 address: '456 Healthcare Blvd, Charlotte, NC 28209',
