@@ -25,7 +25,8 @@ class WebSearchService {
 
         } catch (error) {
             console.error('❌ WebSearch: Error searching for hospitals:', error.message);
-            return this.getFallbackHospitals(latitude, longitude);
+            console.log('🔍 WebSearch: Falling back to enhanced hospital data due to error');
+            return this.getEnhancedFallbackHospitals(latitude, longitude);
         }
     }
 
@@ -46,7 +47,8 @@ class WebSearchService {
 
         } catch (error) {
             console.error('❌ WebSearch: Error searching for specialists:', error.message);
-            return this.getFallbackSpecialists(latitude, longitude);
+            console.log('🔍 WebSearch: Falling back to enhanced specialist data due to error');
+            return this.getEnhancedFallbackSpecialists(latitude, longitude);
         }
     }
 
