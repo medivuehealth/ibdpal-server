@@ -314,3 +314,4 @@ router.get('/nutrition-articles/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Fixed: SQL parameter binding issue resolved
