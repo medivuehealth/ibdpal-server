@@ -1,0 +1,1 @@
+const fs = require("fs"); const projectPath = "/Users/psku010/Documents/development/IBDPal/IBDPal/IBDPal.xcodeproj/project.pbxproj"; const content = fs.readFileSync("/Users/psku010/Documents/development/IBDPal/ios/IBDPal.xcodeproj/project.pbxproj", "utf8"); fs.writeFileSync(projectPath, content); console.log("Project file copied successfully!");
