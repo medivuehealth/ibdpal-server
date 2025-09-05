@@ -7,7 +7,7 @@ const { authenticateToken } = require('../middleware/auth');
 router.post('/profile', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { age, weight, height, gender, micronutrients } = req.body;
+        const { age, weight, height, gender, labResults, supplements } = req.body;
 
         console.log('Creating/updating micronutrient profile for user:', userId);
 
@@ -57,33 +57,62 @@ router.post('/profile', authenticateToken, async (req, res) => {
                     [age, weight, height || null, gender || null, userId]
                 );
 
-                // Delete existing supplements
-                await db.query(
-                    'DELETE FROM micronutrient_supplements WHERE profile_id = $1',
-                    [profileId]
-                );
-
                 console.log('Updated existing micronutrient profile for user:', userId);
             } else {
                 // Create new profile
-                const profileResult = await db.query(
+                const newProfile = await db.query(
                     `INSERT INTO micronutrient_profiles (user_id, age, weight, height, gender)
                      VALUES ($1, $2, $3, $4, $5)
                      RETURNING id`,
                     [userId, age, weight, height || null, gender || null]
                 );
 
-                profileId = profileResult.rows[0].id;
+                profileId = newProfile.rows[0].id;
                 console.log('Created new micronutrient profile for user:', userId);
             }
 
-            // Insert micronutrients if provided
-            if (micronutrients && micronutrients.length > 0) {
-                for (const supplement of micronutrients) {
+            // Handle lab results if provided
+            if (labResults && Array.isArray(labResults)) {
+                // Delete existing lab results
+                await db.query(
+                    'DELETE FROM micronutrient_lab_results WHERE profile_id = $1',
+                    [profileId]
+                );
+
+                // Insert new lab results
+                for (const labResult of labResults) {
+                    await db.query(
+                        `INSERT INTO micronutrient_lab_results 
+                         (profile_id, nutrient, value, unit, reference_range, status, test_date, notes)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                        [
+                            profileId,
+                            labResult.nutrient,
+                            labResult.value,
+                            labResult.unit,
+                            labResult.referenceRange,
+                            labResult.status,
+                            labResult.testDate,
+                            labResult.notes || null
+                        ]
+                    );
+                }
+            }
+
+            // Handle supplements if provided
+            if (supplements && Array.isArray(supplements)) {
+                // Delete existing supplements
+                await db.query(
+                    'DELETE FROM micronutrient_supplements WHERE profile_id = $1',
+                    [profileId]
+                );
+
+                // Insert new supplements
+                for (const supplement of supplements) {
                     await db.query(
                         `INSERT INTO micronutrient_supplements 
-                         (profile_id, name, category, dosage, unit, frequency, start_date, notes)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                         (profile_id, name, category, dosage, unit, frequency, start_date, is_active, notes)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                         [
                             profileId,
                             supplement.name,
@@ -91,48 +120,45 @@ router.post('/profile', authenticateToken, async (req, res) => {
                             supplement.dosage,
                             supplement.unit,
                             supplement.frequency,
-                            supplement.startDate || null,
+                            supplement.startDate,
+                            supplement.isActive !== false, // Default to true
                             supplement.notes || null
                         ]
                     );
                 }
-                console.log(`Added ${micronutrients.length} supplements for user:`, userId);
             }
 
-            // Commit transaction
             await db.query('COMMIT');
 
             res.json({
                 success: true,
                 message: 'Micronutrient profile saved successfully',
                 data: {
-                    profileId,
-                    age,
-                    weight,
-                    height,
-                    gender,
-                    supplementCount: micronutrients ? micronutrients.length : 0
+                    profileId: profileId,
+                    userId: userId,
+                    age: age,
+                    weight: weight,
+                    height: height,
+                    gender: gender
                 }
             });
 
         } catch (error) {
-            // Rollback transaction
             await db.query('ROLLBACK');
             throw error;
         }
 
     } catch (error) {
-        console.error('Error saving micronutrient profile:', error);
+        console.error('Micronutrient profile save error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to save micronutrient profile',
-            error: error.message
+            message: 'Failed to save micronutrient profile'
         });
     }
 });
 
-// GET /api/micronutrient/profile/:userId - Get micronutrient profile
-router.get("/profile", authenticateToken, async (req, res) => {
+// GET /api/micronutrient/profile - Get micronutrient profile
+router.get('/profile', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
 
@@ -156,32 +182,51 @@ router.get("/profile", authenticateToken, async (req, res) => {
 
         const profile = profileResult.rows[0];
 
-        // Get supplements
-        const supplementsResult = await db.query(
-            `SELECT name, category, dosage, unit, frequency, start_date, notes, created_at, updated_at
-             FROM micronutrient_supplements 
+        // Get lab results
+        const labResultsResult = await db.query(
+            `SELECT id, nutrient, value, unit, reference_range, status, test_date, notes, created_at, updated_at
+             FROM micronutrient_lab_results 
              WHERE profile_id = $1
-             ORDER BY category, name`,
+             ORDER BY test_date DESC`,
             [profile.id]
         );
 
-        const supplements = supplementsResult.rows.map(supplement => ({
-            name: supplement.name,
-            category: supplement.category,
-            dosage: supplement.dosage,
-            unit: supplement.unit,
-            frequency: supplement.frequency,
-            startDate: supplement.start_date,
-            notes: supplement.notes
-        }));
+        // Get supplements
+        const supplementsResult = await db.query(
+            `SELECT id, name, category, dosage, unit, frequency, start_date, is_active, notes, created_at, updated_at
+             FROM micronutrient_supplements 
+             WHERE profile_id = $1
+             ORDER BY start_date DESC`,
+            [profile.id]
+        );
 
         const responseData = {
             userId: profile.user_id,
             age: profile.age,
-            weight: profile.weight,
-            height: profile.height,
+            weight: profile.weight.toString(),
+            height: profile.height ? profile.height.toString() : null,
             gender: profile.gender,
-            micronutrients: supplements,
+            labResults: labResultsResult.rows.map(row => ({
+                id: row.id.toString(),
+                nutrient: row.nutrient,
+                value: parseFloat(row.value),
+                unit: row.unit,
+                referenceRange: row.reference_range,
+                status: row.status,
+                testDate: row.test_date.toISOString().split('T')[0],
+                notes: row.notes
+            })),
+            supplements: supplementsResult.rows.map(row => ({
+                id: row.id.toString(),
+                name: row.name,
+                category: row.category,
+                dosage: parseFloat(row.dosage),
+                unit: row.unit,
+                frequency: row.frequency,
+                startDate: row.start_date.toISOString().split('T')[0],
+                isActive: row.is_active,
+                notes: row.notes
+            })),
             lastUpdated: profile.updated_at
         };
 
@@ -192,27 +237,31 @@ router.get("/profile", authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching micronutrient profile:', error);
+        console.error('Micronutrient profile fetch error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to fetch micronutrient profile',
-            error: error.message
+            message: 'Failed to fetch micronutrient profile'
         });
     }
 });
 
-// GET /api/micronutrient/recommendations/:userId - Get personalized nutrition recommendations
-router.get('/recommendations/:userId', authenticateToken, async (req, res) => {
+// POST /api/micronutrient/lab-result - Add a single lab result
+router.post('/lab-result', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
+        const { nutrient, value, unit, referenceRange, status, testDate, notes } = req.body;
 
-        console.log('Generating nutrition recommendations for user:', userId);
+        // Validate required fields
+        if (!nutrient || value === undefined || !unit || !referenceRange || !status || !testDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'All fields are required: nutrient, value, unit, referenceRange, status, testDate'
+            });
+        }
 
-        // Get user profile
+        // Get user's profile
         const profileResult = await db.query(
-            `SELECT age, weight, height, gender
-             FROM micronutrient_profiles 
-             WHERE user_id = $1`,
+            'SELECT id FROM micronutrient_profiles WHERE user_id = $1',
             [userId]
         );
 
@@ -223,158 +272,176 @@ router.get('/recommendations/:userId', authenticateToken, async (req, res) => {
             });
         }
 
-        const profile = profileResult.rows[0];
+        const profileId = profileResult.rows[0].id;
 
-        // Get current supplements
-        const supplementsResult = await db.query(
-            `SELECT ms.name, ms.category, ms.dosage, ms.unit, ms.frequency
-             FROM micronutrient_supplements ms
-             JOIN micronutrient_profiles mp ON ms.profile_id = mp.id
-             WHERE mp.user_id = $1`,
-            [userId]
+        // Insert lab result
+        const result = await db.query(
+            `INSERT INTO micronutrient_lab_results 
+             (profile_id, nutrient, value, unit, reference_range, status, test_date, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING id`,
+            [profileId, nutrient, value, unit, referenceRange, status, testDate, notes || null]
         );
-
-        const currentSupplements = supplementsResult.rows;
-
-        // Generate personalized recommendations based on age, weight, and IBD
-        const recommendations = generateIBDRecommendations(profile, currentSupplements);
 
         res.json({
             success: true,
             data: {
-                profile: {
-                    age: profile.age,
-                    weight: profile.weight,
-                    height: profile.height,
-                    gender: profile.gender
-                },
-                currentSupplements: currentSupplements,
-                recommendations: recommendations
+                id: result.rows[0].id.toString(),
+                nutrient,
+                value: parseFloat(value),
+                unit,
+                referenceRange,
+                status,
+                testDate,
+                notes
             },
-            message: 'Nutrition recommendations generated successfully'
+            message: 'Lab result added successfully'
         });
 
     } catch (error) {
-        console.error('Error generating nutrition recommendations:', error);
+        console.error('Add lab result error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to generate nutrition recommendations',
-            error: error.message
+            message: 'Failed to add lab result'
         });
     }
 });
 
-// Helper function to generate IBD-specific nutrition recommendations
-function generateIBDRecommendations(profile, currentSupplements) {
-    const recommendations = {
-        essential: [],
-        beneficial: [],
-        considerations: [],
-        warnings: []
-    };
+// POST /api/micronutrient/supplement - Add a single supplement
+router.post('/supplement', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { name, category, dosage, unit, frequency, startDate, isActive, notes } = req.body;
 
-    const age = profile.age;
-    const weight = profile.weight;
-    const gender = profile.gender;
+        // Validate required fields
+        if (!name || !category || dosage === undefined || !unit || !frequency || !startDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'All fields are required: name, category, dosage, unit, frequency, startDate'
+            });
+        }
 
-    // Check for common deficiencies in IBD patients
-    const currentSupplementNames = currentSupplements.map(s => s.name.toLowerCase());
+        // Get user's profile
+        const profileResult = await db.query(
+            'SELECT id FROM micronutrient_profiles WHERE user_id = $1',
+            [userId]
+        );
 
-    // Vitamin D - Essential for IBD patients
-    if (!currentSupplementNames.some(name => name.includes('vitamin d') || name.includes('d3'))) {
-        recommendations.essential.push({
-            supplement: 'Vitamin D3',
-            dosage: age < 18 ? '1000-2000 IU' : '2000-4000 IU',
-            frequency: 'Daily',
-            reason: 'IBD patients are at high risk for vitamin D deficiency, which can affect bone health and immune function'
+        if (profileResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No micronutrient profile found. Please create a profile first.'
+            });
+        }
+
+        const profileId = profileResult.rows[0].id;
+
+        // Insert supplement
+        const result = await db.query(
+            `INSERT INTO micronutrient_supplements 
+             (profile_id, name, category, dosage, unit, frequency, start_date, is_active, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING id`,
+            [profileId, name, category, dosage, unit, frequency, startDate, isActive !== false, notes || null]
+        );
+
+        res.json({
+            success: true,
+            data: {
+                id: result.rows[0].id.toString(),
+                name,
+                category,
+                dosage: parseFloat(dosage),
+                unit,
+                frequency,
+                startDate,
+                isActive: isActive !== false,
+                notes
+            },
+            message: 'Supplement added successfully'
+        });
+
+    } catch (error) {
+        console.error('Add supplement error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to add supplement'
         });
     }
+});
 
-    // Vitamin B12 - Common deficiency
-    if (!currentSupplementNames.some(name => name.includes('b12') || name.includes('cobalamin'))) {
-        recommendations.essential.push({
-            supplement: 'Vitamin B12',
-            dosage: '1000-2000 mcg',
-            frequency: 'Daily',
-            reason: 'Essential for nerve function and red blood cell production, commonly deficient in IBD'
+// DELETE /api/micronutrient/lab-result/:id - Delete a lab result
+router.delete('/lab-result/:id', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const labResultId = req.params.id;
+
+        // Verify ownership and delete
+        const result = await db.query(
+            `DELETE FROM micronutrient_lab_results 
+             WHERE id = $1 AND profile_id IN (
+                 SELECT id FROM micronutrient_profiles WHERE user_id = $2
+             )
+             RETURNING id`,
+            [labResultId, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Lab result not found or access denied'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Lab result deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete lab result error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete lab result'
         });
     }
+});
 
-    // Iron - Check for anemia risk
-    if (!currentSupplementNames.some(name => name.includes('iron'))) {
-        recommendations.beneficial.push({
-            supplement: 'Iron (if deficient)',
-            dosage: '18-65 mg elemental iron',
-            frequency: 'Daily with vitamin C',
-            reason: 'IBD patients often have iron deficiency anemia due to blood loss and malabsorption'
+// DELETE /api/micronutrient/supplement/:id - Delete a supplement
+router.delete('/supplement/:id', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const supplementId = req.params.id;
+
+        // Verify ownership and delete
+        const result = await db.query(
+            `DELETE FROM micronutrient_supplements 
+             WHERE id = $1 AND profile_id IN (
+                 SELECT id FROM micronutrient_profiles WHERE user_id = $2
+             )
+             RETURNING id`,
+            [supplementId, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Supplement not found or access denied'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Supplement deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete supplement error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete supplement'
         });
     }
-
-    // Probiotics - Beneficial for gut health
-    if (!currentSupplementNames.some(name => name.includes('probiotic'))) {
-        recommendations.beneficial.push({
-            supplement: 'Multi-strain Probiotic',
-            dosage: '10-50 billion CFU',
-            frequency: 'Daily',
-            reason: 'May help maintain gut microbiome balance and reduce inflammation'
-        });
-    }
-
-    // Omega-3 - Anti-inflammatory
-    if (!currentSupplementNames.some(name => name.includes('omega') || name.includes('fish oil'))) {
-        recommendations.beneficial.push({
-            supplement: 'Omega-3 (EPA/DHA)',
-            dosage: '1000-2000 mg',
-            frequency: 'Daily',
-            reason: 'Anti-inflammatory properties may help reduce IBD inflammation'
-        });
-    }
-
-    // Folic Acid - Important for cell division
-    if (!currentSupplementNames.some(name => name.includes('folic') || name.includes('folate'))) {
-        recommendations.beneficial.push({
-            supplement: 'Folic Acid',
-            dosage: '400-800 mcg',
-            frequency: 'Daily',
-            reason: 'Important for cell division and DNA synthesis, especially if taking certain IBD medications'
-        });
-    }
-
-    // Age-specific recommendations
-    if (age < 18) {
-        recommendations.considerations.push({
-            type: 'Age-specific',
-            note: 'Pediatric dosing may be different. Consult with healthcare provider for appropriate dosages.'
-        });
-    }
-
-    if (age > 65) {
-        recommendations.considerations.push({
-            type: 'Age-specific',
-            note: 'Older adults may need higher doses of certain vitamins (B12, D3) due to decreased absorption.'
-        });
-    }
-
-    // Gender-specific recommendations
-    if (gender === 'Female') {
-        recommendations.considerations.push({
-            type: 'Gender-specific',
-            note: 'Women with IBD may need additional iron and folic acid, especially during childbearing years.'
-        });
-    }
-
-    // General IBD considerations
-    recommendations.warnings.push({
-        type: 'General',
-        note: 'Always consult with your healthcare provider before starting new supplements, especially if taking IBD medications.'
-    });
-
-    recommendations.warnings.push({
-        type: 'General',
-        note: 'Some supplements may interact with IBD medications. Discuss with your doctor or pharmacist.'
-    });
-
-    return recommendations;
-}
+});
 
 module.exports = router;
