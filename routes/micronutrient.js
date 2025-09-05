@@ -132,9 +132,9 @@ router.post('/profile', authenticateToken, async (req, res) => {
 });
 
 // GET /api/micronutrient/profile/:userId - Get micronutrient profile
-router.get('/profile/:userId', authenticateToken, async (req, res) => {
+router.get("/profile", authenticateToken, async (req, res) => {
     try {
-        const userId = req.params.userId;
+        const userId = req.user.userId;
 
         console.log('Fetching micronutrient profile for user:', userId);
 
@@ -204,7 +204,7 @@ router.get('/profile/:userId', authenticateToken, async (req, res) => {
 // GET /api/micronutrient/recommendations/:userId - Get personalized nutrition recommendations
 router.get('/recommendations/:userId', authenticateToken, async (req, res) => {
     try {
-        const userId = req.params.userId;
+        const userId = req.user.userId;
 
         console.log('Generating nutrition recommendations for user:', userId);
 
