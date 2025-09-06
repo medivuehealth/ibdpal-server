@@ -117,7 +117,7 @@ router.post('/profile', authenticateToken, async (req, res) => {
                             profileId,
                             supplement.name,
                             supplement.category,
-                            supplement.dosage,
+                            supplement.dosage.toString(),
                             supplement.unit,
                             supplement.frequency,
                             supplement.startDate,
