@@ -3,6 +3,48 @@ const router = express.Router();
 const db = require('../database/db');
 const { authenticateToken } = require('../middleware/auth');
 
+// Helper functions to map client values to database values
+function getCategoryValue(category) {
+    const categoryMap = {
+        "vitamin": "Vitamins",
+        "mineral": "Minerals",
+        "probiotic": "Probiotics",
+        "omega3": "Omega-3",
+        "antioxidant": "Antioxidants",
+        "other": "Other"
+    };
+    return categoryMap[category.toLowerCase()] || "Other";
+}
+
+function getFrequencyValue(frequency) {
+    const frequencyMap = {
+        "daily": "Daily",
+        "twice daily": "Twice Daily",
+        "weekly": "Weekly",
+        "as needed": "As Needed",
+        "other": "Other"
+    };
+    return frequencyMap[frequency.toLowerCase()] || "Daily";
+}
+
+function getUnitValue(unit) {
+    const unitMap = {
+        "mg": "mg",
+        "mcg": "mcg",
+        "g": "g",
+        "ml": "ml",
+        "iu": "IU",
+        "capsule": "capsules",
+        "capsules": "capsules",
+        "tablet": "tablets",
+        "tablets": "tablets",
+        "drops": "drops",
+        "tsp": "tsp",
+        "tbsp": "tbsp"
+    };
+    return unitMap[unit.toLowerCase()] || "mg";
+}
+
 // POST /api/micronutrient/profile - Create or update micronutrient profile
 router.post('/profile', authenticateToken, async (req, res) => {
     try {
@@ -125,10 +167,10 @@ router.post('/profile', authenticateToken, async (req, res) => {
                         [
                             profileId,
                             supplement.name,
-                            supplement.category,
+                            getCategoryValue(supplement.category),
                             supplement.dosage.toString(),
-                            supplement.unit,
-                            supplement.frequency,
+                            getUnitValue(supplement.unit),
+                            getFrequencyValue(supplement.frequency),
                             supplement.startDate,
                             supplement.isActive !== false, // Default to true
                             supplement.notes || null
