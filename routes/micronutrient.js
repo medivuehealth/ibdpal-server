@@ -43,46 +43,6 @@ function getUnitValue(unit) {
         "tbsp": "tbsp"
     };
     return unitMap[unit.toLowerCase()] || "mg";
-
-// Helper functions to map database values back to client values
-function getClientCategoryValue(category) {
-    const categoryMap = {
-        "Vitamins": "vitamin",
-        "Minerals": "mineral",
-        "Probiotics": "probiotic",
-        "Omega-3": "omega3",
-        "Antioxidants": "antioxidant",
-        "Other": "other"
-    };
-    return categoryMap[category] || "other";
-}
-
-function getClientFrequencyValue(frequency) {
-    const frequencyMap = {
-        "Daily": "daily",
-        "Twice Daily": "twice daily",
-        "Weekly": "weekly",
-        "As Needed": "as needed",
-        "Other": "other"
-    };
-    return frequencyMap[frequency] || "daily";
-}
-
-function getClientUnitValue(unit) {
-    const unitMap = {
-        "mg": "mg",
-        "mcg": "mcg",
-        "g": "g",
-        "ml": "ml",
-        "IU": "iu",
-        "capsules": "capsules",
-        "tablets": "tablets",
-        "drops": "drops",
-        "tsp": "tsp",
-        "tbsp": "tbsp"
-    };
-    return unitMap[unit] || "mg";
-}
 }
 
 // POST /api/micronutrient/profile - Create or update micronutrient profile
@@ -310,7 +270,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
                 id: row.id.toString(),
                 nutrient: row.nutrient,
                 value: parseFloat(row.value),
-                unit: getClientUnitValue(row.unit),
+                unit: row.unit,
                 referenceRange: row.reference_range,
                 status: row.status,
                 testDate: row.test_date.toISOString().split('T')[0],
@@ -319,10 +279,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
             supplements: supplementsResult.rows.map(row => ({
                 id: row.id.toString(),
                 name: row.name,
-                category: getClientCategoryValue(row.category),
+                category: row.category,
                 dosage: parseFloat(row.dosage),
-                unit: getClientUnitValue(row.unit),
-                frequency: getClientFrequencyValue(row.frequency),
+                unit: row.unit,
+                frequency: row.frequency,
                 startDate: row.start_date.toISOString().split('T')[0],
                 isActive: row.is_active,
                 notes: row.notes
