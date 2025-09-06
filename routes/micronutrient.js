@@ -6,7 +6,16 @@ const { authenticateToken } = require('../middleware/auth');
 // POST /api/micronutrient/profile - Create or update micronutrient profile
 router.post('/profile', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
         const { age, weight, height, gender, labResults, supplements } = req.body;
 
         console.log('Creating/updating micronutrient profile for user:', userId);
@@ -160,7 +169,16 @@ router.post('/profile', authenticateToken, async (req, res) => {
 // GET /api/micronutrient/profile - Get micronutrient profile
 router.get('/profile', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
 
         console.log('Fetching micronutrient profile for user:', userId);
 
@@ -248,7 +266,16 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // POST /api/micronutrient/lab-result - Add a single lab result
 router.post('/lab-result', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
         const { nutrient, value, unit, referenceRange, status, testDate, notes } = req.body;
 
         // Validate required fields
@@ -310,7 +337,16 @@ router.post('/lab-result', authenticateToken, async (req, res) => {
 // POST /api/micronutrient/supplement - Add a single supplement
 router.post('/supplement', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
         const { name, category, dosage, unit, frequency, startDate, isActive, notes } = req.body;
 
         // Validate required fields
@@ -373,7 +409,16 @@ router.post('/supplement', authenticateToken, async (req, res) => {
 // DELETE /api/micronutrient/lab-result/:id - Delete a lab result
 router.delete('/lab-result/:id', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
         const labResultId = req.params.id;
 
         // Verify ownership and delete
@@ -410,7 +455,16 @@ router.delete('/lab-result/:id', authenticateToken, async (req, res) => {
 // DELETE /api/micronutrient/supplement/:id - Delete a supplement
 router.delete('/supplement/:id', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.email;
+        const userUuid = req.user.userId;
+        // Get username from users table
+        const userResult = await db.query("SELECT username FROM users WHERE user_id = $1", [userUuid]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        const userId = userResult.rows[0].username;
         const supplementId = req.params.id;
 
         // Verify ownership and delete
