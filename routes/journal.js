@@ -1083,6 +1083,8 @@ router.get('/latest-medication/:username', async (req, res) => {
                 medication_type,
                 dosage_level,
                 last_taken_date,
+                medication_taken,
+                notes,
                 je.created_at
             FROM journal_entries je
             JOIN users u ON je.user_id = u.user_id
@@ -1102,6 +1104,8 @@ router.get('/latest-medication/:username', async (req, res) => {
                 medication_type: latestMedication.medication_type,
                 dosage_level: latestMedication.dosage_level,
                 last_taken_date: latestMedication.last_taken_date,
+                medication_taken: latestMedication.medication_taken,
+                notes: latestMedication.notes,
                 created_at: latestMedication.created_at
             });
         } else {
@@ -1110,6 +1114,8 @@ router.get('/latest-medication/:username', async (req, res) => {
                 medication_type: 'None',
                 dosage_level: null,
                 last_taken_date: null,
+                medication_taken: null,
+                notes: null,
                 created_at: null
             });
         }
