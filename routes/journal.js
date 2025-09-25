@@ -300,15 +300,36 @@ async function updateJournalEntry(entryId, journalData, res) {
                 // Pain time must be one of the valid values, default to 'None' if empty/invalid
                 updateValues.push((value && ['None', 'morning', 'afternoon', 'evening', 'night', 'variable'].includes(value)) ? value : 'None');
             } else if (field === 'dosage_level') {
-                // Dosage level must be text and match medication type constraints
+                // Dosage level can be in new format (e.g., "40mg_every_4_weeks") or old format (e.g., "every_4_weeks")
                 let validDosage = '0'; // default for 'None' medication type
                 
                 if (journalData.medication_type === 'biologic') {
-                    validDosage = (value && ['every_2_weeks', 'every_4_weeks', 'every_8_weeks'].includes(value)) ? value : 'every_4_weeks';
+                    // Check if it's in new format (contains "mg_")
+                    if (value && value.includes('mg_')) {
+                        validDosage = value; // Keep the full dosage_level as sent by client
+                    } else if (value && ['every_2_weeks', 'every_4_weeks', 'every_8_weeks'].includes(value)) {
+                        validDosage = value; // Old format
+                    } else {
+                        validDosage = 'every_4_weeks'; // Default
+                    }
                 } else if (journalData.medication_type === 'immunosuppressant') {
-                    validDosage = (value && ['daily', 'twice_daily', 'weekly'].includes(value)) ? value : 'daily';
+                    // Check if it's in new format (contains "mg_")
+                    if (value && value.includes('mg_')) {
+                        validDosage = value; // Keep the full dosage_level as sent by client
+                    } else if (value && ['daily', 'twice_daily', 'weekly'].includes(value)) {
+                        validDosage = value; // Old format
+                    } else {
+                        validDosage = 'daily'; // Default
+                    }
                 } else if (journalData.medication_type === 'steroid') {
-                    validDosage = (value && ['5', '10', '20'].includes(value)) ? value : '5';
+                    // Check if it's in new format (contains "mg_")
+                    if (value && value.includes('mg_')) {
+                        validDosage = value; // Keep the full dosage_level as sent by client
+                    } else if (value && ['5', '10', '20'].includes(value)) {
+                        validDosage = value; // Old format
+                    } else {
+                        validDosage = '5'; // Default
+                    }
                 } else {
                     // For 'None' or any other medication type, use '0'
                     validDosage = '0';
