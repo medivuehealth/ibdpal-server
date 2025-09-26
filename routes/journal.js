@@ -111,12 +111,12 @@ async function createJournalEntry(journalData, res) {
                 dinner_calories, dinner_protein, dinner_carbs, dinner_fiber, dinner_fat,
                 snack_calories, snack_protein, snack_carbs, snack_fiber, snack_fat,
                 stress_source, coping_strategies, mood_level, sleep_quality, sleep_notes,
-                water_intake, other_fluids, fluid_type
+                water_intake, other_fluids, fluid_type, supplements_taken, supplements_count, supplement_details
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
                     $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49,
-                    $50, $51, $52, $53, $54, $55, $56, $57)
+                    $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60)
             RETURNING entry_id;
         `;
         
@@ -178,7 +178,10 @@ async function createJournalEntry(journalData, res) {
             journalData.sleep_notes || '',         // $54 - sleep_notes
             parseFloat(journalData.water_intake) || 0, // $55 - water_intake
             parseFloat(journalData.other_fluids) || 0, // $56 - other_fluids
-            journalData.fluid_type || 'Water'      // $57 - fluid_type
+            journalData.fluid_type || 'Water',     // $57 - fluid_type
+            journalData.supplements_taken || false, // $58 - supplements_taken
+            journalData.supplements_count || 0,    // $59 - supplements_count
+            JSON.stringify(journalData.supplement_details || []) // $60 - supplement_details
         ];
         
         console.log('🔍 Executing journal entry query with values:', values);
@@ -270,7 +273,11 @@ async function updateJournalEntry(entryId, journalData, res) {
         // Hydration-related fields
         'water_intake': journalData.water_intake,
         'other_fluids': journalData.other_fluids,
-        'fluid_type': journalData.fluid_type
+        'fluid_type': journalData.fluid_type,
+        // Supplements-related fields
+        'supplements_taken': journalData.supplements_taken,
+        'supplements_count': journalData.supplements_count,
+        'supplement_details': journalData.supplement_details
     };
 
     Object.entries(fieldsToUpdate).forEach(([field, value]) => {
@@ -578,6 +585,10 @@ router.get('/entries/:username', async (req, res) => {
                 water_intake: entry.water_intake || null,
                 other_fluids: entry.other_fluids || null,
                 fluid_type: entry.fluid_type || null,
+                // Supplements-related fields
+                supplements_taken: entry.supplements_taken || null,
+                supplements_count: entry.supplements_count || null,
+                supplement_details: entry.supplement_details || null,
                 notes: entry.notes,
                 created_at: entry.created_at,
                 updated_at: entry.updated_at
@@ -671,7 +682,11 @@ router.put('/entries/:entryId', async (req, res) => {
             // Hydration-related fields
             'water_intake': journalData.water_intake,
             'other_fluids': journalData.other_fluids,
-            'fluid_type': journalData.fluid_type
+            'fluid_type': journalData.fluid_type,
+            // Supplements-related fields
+            'supplements_taken': journalData.supplements_taken,
+            'supplements_count': journalData.supplements_count,
+            'supplement_details': journalData.supplement_details
         };
 
         Object.entries(fieldsToUpdate).forEach(([field, value]) => {
