@@ -345,6 +345,9 @@ async function updateJournalEntry(entryId, journalData, res) {
             } else if (['calories', 'protein', 'carbs', 'fiber', 'breakfast_calories', 'breakfast_protein', 'breakfast_carbs', 'breakfast_fiber', 'breakfast_fat', 'lunch_calories', 'lunch_protein', 'lunch_carbs', 'lunch_fiber', 'lunch_fat', 'dinner_calories', 'dinner_protein', 'dinner_carbs', 'dinner_fiber', 'dinner_fat', 'snack_calories', 'snack_protein', 'snack_carbs', 'snack_fiber', 'snack_fat'].includes(field)) {
                 // Convert nutrition fields to integers
                 updateValues.push(Math.round(parseFloat(value) || 0));
+            } else if (field === 'supplement_details') {
+                // JSON stringify supplement_details for PostgreSQL JSONB column
+                updateValues.push(JSON.stringify(value || []));
             } else {
                 updateValues.push(value);
             }
