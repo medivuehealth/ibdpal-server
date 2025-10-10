@@ -132,7 +132,7 @@ async function getLast30DaysJournalEntries(userId) {
     
     const result = await query(`
         SELECT 
-            entry_id, entry_date, blood_present, mucus_present,
+            entry_id, entry_date, blood_present,
             pain_severity, urgency_level, bowel_frequency, bristol_scale,
             stress_level, fatigue_level, sleep_quality, hydration_level,
             created_at, updated_at
@@ -149,15 +149,37 @@ async function getLast30DaysJournalEntries(userId) {
  * Get user diagnosis information for fallback
  */
 async function getUserDiagnosis(userId) {
-    const result = await query(`
-        SELECT disease_type, disease_severity, diagnosis_date
-        FROM user_diagnosis 
+    // Try to get from users table first (since user_diagnosis table might not exist)
+    const userResult = await query(`
+        SELECT ibd_type, disease_activity
+        FROM users 
         WHERE user_id = $1
-        ORDER BY diagnosis_date DESC
-        LIMIT 1
     `, [userId]);
     
-    return result.rows.length > 0 ? result.rows[0] : null;
+    if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+        return {
+            disease_type: user.ibd_type || 'IBD',
+            disease_severity: user.disease_activity || 'mild',
+            diagnosis_date: new Date()
+        };
+    }
+    
+    // Fallback to user_diagnosis table if it exists
+    try {
+        const result = await query(`
+            SELECT disease_type, disease_severity, diagnosis_date
+            FROM user_diagnosis 
+            WHERE user_id = $1
+            ORDER BY diagnosis_date DESC
+            LIMIT 1
+        `, [userId]);
+        
+        return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+        // Table doesn't exist, return null
+        return null;
+    }
 }
 
 /**
@@ -216,9 +238,8 @@ function calculateWeightedSymptomScores(entries) {
             dailyScore += weights.criticalSymptoms * 10.0; // Maximum weight for blood
         }
         
-        if (entry.mucus_present) {
-            dailyScore += weights.criticalSymptoms * 7.0;
-        }
+        // Note: mucus_present column doesn't exist in current schema
+        // Using blood_present as primary critical symptom indicator
         
         // PAIN SEVERITY (Weighted by intensity)
         if (entry.pain_severity !== null) {
