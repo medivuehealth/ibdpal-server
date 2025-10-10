@@ -165,11 +165,15 @@ async function getUserProfile(userId) {
         }
         
         // Create default micronutrient profile
+        const defaultGender = user.user_gender && ['Male', 'Female', 'Other'].includes(user.user_gender) 
+            ? user.user_gender 
+            : 'Other'; // Default to 'Other' if gender is not valid
+        
         await query(`
             INSERT INTO micronutrient_profiles (user_id, age, weight, height, gender)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (user_id) DO NOTHING
-        `, [userId, age, 70.0, 170.0, user.user_gender || 'Unknown']);
+        `, [userId, age, 70.0, 170.0, defaultGender]);
         
         // Map diagnosis severity to disease activity
         let diseaseActivity = user.disease_activity || 'remission';
@@ -188,7 +192,7 @@ async function getUserProfile(userId) {
             age: age,
             weight: 70.0,
             height: 170.0,
-            gender: user.user_gender || 'Unknown',
+            gender: defaultGender,
             disease_activity: diseaseActivity,
             disease_type: user.ibd_type || (diagnosisData?.diagnosis || 'IBD')
         };
