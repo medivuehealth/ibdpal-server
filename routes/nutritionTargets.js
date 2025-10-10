@@ -115,15 +115,108 @@ router.get('/:userId/micronutrients', async (req, res) => {
  * Get user profile data
  */
 async function getUserProfile(userId) {
-    const result = await query(`
+    // Get profile from micronutrient_profiles table (has age, weight, height, gender)
+    const profileResult = await query(`
         SELECT 
-            user_id, age, weight, height, gender, 
-            disease_activity, disease_type
+            user_id, age, weight, height, gender
+        FROM micronutrient_profiles 
+        WHERE user_id = $1
+    `, [userId]);
+    
+    // Get user data from users table
+    const userResult = await query(`
+        SELECT 
+            user_id, email, first_name, last_name, date_of_birth, gender as user_gender,
+            disease_activity, ibd_type
         FROM users 
         WHERE user_id = $1
     `, [userId]);
     
-    return result.rows.length > 0 ? result.rows[0] : null;
+    const user = userResult.rows.length > 0 ? userResult.rows[0] : {};
+    
+    // Get diagnosis data for disease severity mapping
+    let diagnosisData = null;
+    if (user.email) {
+        try {
+            const diagnosisResult = await query(`
+                SELECT disease_severity, diagnosis, disease_location, disease_behavior
+                FROM user_diagnosis 
+                WHERE username = $1
+            `, [user.email]);
+            diagnosisData = diagnosisResult.rows.length > 0 ? diagnosisResult.rows[0] : null;
+        } catch (error) {
+            // user_diagnosis table might not exist
+            diagnosisData = null;
+        }
+    }
+    
+    // If no micronutrient profile exists, create one with default values
+    if (profileResult.rows.length === 0) {
+        // Calculate age from date_of_birth if available
+        let age = 30; // Default age
+        if (user.date_of_birth) {
+            const birthDate = new Date(user.date_of_birth);
+            const today = new Date();
+            age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+        }
+        
+        // Create default micronutrient profile
+        await query(`
+            INSERT INTO micronutrient_profiles (user_id, age, weight, height, gender)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (user_id) DO NOTHING
+        `, [userId, age, 70.0, 170.0, user.user_gender || 'Unknown']);
+        
+        // Map diagnosis severity to disease activity
+        let diseaseActivity = user.disease_activity || 'remission';
+        if (diagnosisData && diagnosisData.disease_severity) {
+            switch (diagnosisData.disease_severity.toLowerCase()) {
+                case 'mild': diseaseActivity = 'mild'; break;
+                case 'moderate': diseaseActivity = 'moderate'; break;
+                case 'severe': diseaseActivity = 'severe'; break;
+                default: diseaseActivity = 'remission';
+            }
+        }
+        
+        // Return default profile
+        return {
+            user_id: userId,
+            age: age,
+            weight: 70.0,
+            height: 170.0,
+            gender: user.user_gender || 'Unknown',
+            disease_activity: diseaseActivity,
+            disease_type: user.ibd_type || (diagnosisData?.diagnosis || 'IBD')
+        };
+    }
+    
+    const profile = profileResult.rows[0];
+    
+    // Map diagnosis severity to disease activity if available
+    let diseaseActivity = user.disease_activity || 'remission';
+    if (diagnosisData && diagnosisData.disease_severity) {
+        switch (diagnosisData.disease_severity.toLowerCase()) {
+            case 'mild': diseaseActivity = 'mild'; break;
+            case 'moderate': diseaseActivity = 'moderate'; break;
+            case 'severe': diseaseActivity = 'severe'; break;
+            default: diseaseActivity = 'remission';
+        }
+    }
+    
+    // Combine profile and user data
+    return {
+        user_id: profile.user_id,
+        age: profile.age,
+        weight: profile.weight,
+        height: profile.height,
+        gender: profile.gender,
+        disease_activity: diseaseActivity,
+        disease_type: user.ibd_type || (diagnosisData?.diagnosis || 'IBD')
+    };
 }
 
 /**
