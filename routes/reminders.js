@@ -1,40 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-
-// Helper function to get user ID from email (following journal route pattern)
-async function getUserIdFromEmail(userEmail) {
-    try {
-        console.log('🔍 Looking up user with email:', userEmail);
-        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [userEmail]);
-        console.log('🔍 User lookup result:', userResult.rows);
-        
-        if (userResult.rows.length === 0) {
-            console.log('❌ User not found for email:', userEmail);
-            return null;
-        }
-        
-        const userId = userResult.rows[0].user_id;
-        console.log('✅ User found, user_id:', userId);
-        return userId;
-    } catch (error) {
-        console.error('❌ Error looking up user:', error);
-        throw error;
-    }
-}
+const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/reminders - Get all reminders for a user
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const userEmail = req.query.user_id;
-        if (!userEmail) {
-            return res.status(400).json({ error: 'User email required' });
-        }
-        
-        const userId = await getUserIdFromEmail(userEmail);
-        if (!userId) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user.userId;
         
         const result = await db.query(
             'SELECT * FROM reminders WHERE user_id = $1 ORDER BY time ASC',
@@ -65,18 +37,10 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/reminders - Create a new reminder
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { user_id: userEmail, title, type, time, isEnabled, repeatDays } = req.body;
-        
-        if (!userEmail) {
-            return res.status(400).json({ error: 'User email required' });
-        }
-        
-        const userId = await getUserIdFromEmail(userEmail);
-        if (!userId) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user.userId;
+        const { title, type, time, isEnabled, repeatDays } = req.body;
 
         // Validate required fields
         if (!title || !type || !time) {
@@ -139,17 +103,9 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/reminders/:id - Update a reminder
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
     try {
-        const { user_id: userEmail } = req.body;
-        if (!userEmail) {
-            return res.status(400).json({ error: 'User email required' });
-        }
-        
-        const userId = await getUserIdFromEmail(userEmail);
-        if (!userId) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user.userId;
         const { id } = req.params;
         const { title, type, time, isEnabled, repeatDays } = req.body;
 
@@ -213,17 +169,9 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/reminders/:id - Delete a reminder
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
     try {
-        const { user_id: userEmail } = req.body;
-        if (!userEmail) {
-            return res.status(400).json({ error: 'User email required' });
-        }
-        
-        const userId = await getUserIdFromEmail(userEmail);
-        if (!userId) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user.userId;
         const { id } = req.params;
 
         const result = await db.query(
@@ -252,17 +200,9 @@ router.delete('/:id', async (req, res) => {
 });
 
 // PATCH /api/reminders/:id/toggle - Toggle reminder enabled/disabled
-router.patch('/:id/toggle', async (req, res) => {
+router.patch('/:id/toggle', authenticateToken, async (req, res) => {
     try {
-        const { user_id: userEmail } = req.body;
-        if (!userEmail) {
-            return res.status(400).json({ error: 'User email required' });
-        }
-        
-        const userId = await getUserIdFromEmail(userEmail);
-        if (!userId) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user.userId;
         const { id } = req.params;
         const { isEnabled } = req.body;
 
