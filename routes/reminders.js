@@ -2,45 +2,39 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
-// Middleware to verify JWT token and get user info
-const authenticateToken = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ error: 'Access token required' });
-    }
-
-    // Get user email from request body (following journal route pattern)
-    const userEmail = req.body.user_id || req.query.user_id;
-    if (!userEmail) {
-        return res.status(400).json({ error: 'User email required' });
-    }
-
+// Helper function to get user ID from email (following journal route pattern)
+async function getUserIdFromEmail(userEmail) {
     try {
         console.log('🔍 Looking up user with email:', userEmail);
-        // Look up user_id from email (same as journal routes)
         const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [userEmail]);
         console.log('🔍 User lookup result:', userResult.rows);
         
         if (userResult.rows.length === 0) {
             console.log('❌ User not found for email:', userEmail);
-            return res.status(404).json({ error: 'User not found' });
+            return null;
         }
         
-        req.userId = userResult.rows[0].user_id;
-        console.log('✅ User found, user_id:', req.userId);
-        next();
+        const userId = userResult.rows[0].user_id;
+        console.log('✅ User found, user_id:', userId);
+        return userId;
     } catch (error) {
         console.error('❌ Error looking up user:', error);
-        return res.status(500).json({ error: 'Database error' });
+        throw error;
     }
-};
+}
 
 // GET /api/reminders - Get all reminders for a user
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const { userId } = req;
+        const userEmail = req.query.user_id;
+        if (!userEmail) {
+            return res.status(400).json({ error: 'User email required' });
+        }
+        
+        const userId = await getUserIdFromEmail(userEmail);
+        if (!userId) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         
         const result = await db.query(
             'SELECT * FROM reminders WHERE user_id = $1 ORDER BY time ASC',
@@ -71,10 +65,18 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/reminders - Create a new reminder
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
-        const { userId } = req;
-        const { title, type, time, isEnabled, repeatDays } = req.body;
+        const { user_id: userEmail, title, type, time, isEnabled, repeatDays } = req.body;
+        
+        if (!userEmail) {
+            return res.status(400).json({ error: 'User email required' });
+        }
+        
+        const userId = await getUserIdFromEmail(userEmail);
+        if (!userId) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         // Validate required fields
         if (!title || !type || !time) {
@@ -137,9 +139,17 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/reminders/:id - Update a reminder
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
-        const { userId } = req;
+        const { user_id: userEmail } = req.body;
+        if (!userEmail) {
+            return res.status(400).json({ error: 'User email required' });
+        }
+        
+        const userId = await getUserIdFromEmail(userEmail);
+        if (!userId) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         const { id } = req.params;
         const { title, type, time, isEnabled, repeatDays } = req.body;
 
@@ -203,9 +213,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/reminders/:id - Delete a reminder
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        const { userId } = req;
+        const { user_id: userEmail } = req.body;
+        if (!userEmail) {
+            return res.status(400).json({ error: 'User email required' });
+        }
+        
+        const userId = await getUserIdFromEmail(userEmail);
+        if (!userId) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         const { id } = req.params;
 
         const result = await db.query(
@@ -234,9 +252,17 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/reminders/:id/toggle - Toggle reminder enabled/disabled
-router.patch('/:id/toggle', authenticateToken, async (req, res) => {
+router.patch('/:id/toggle', async (req, res) => {
     try {
-        const { userId } = req;
+        const { user_id: userEmail } = req.body;
+        if (!userEmail) {
+            return res.status(400).json({ error: 'User email required' });
+        }
+        
+        const userId = await getUserIdFromEmail(userEmail);
+        if (!userId) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         const { id } = req.params;
         const { isEnabled } = req.body;
 
