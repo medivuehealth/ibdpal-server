@@ -1,16 +1,9 @@
 const express = require('express');
-const { Pool } = require('pg');
 const router = express.Router();
-require('dotenv').config({ path: '../../config.env' });
+const db = require('../database/db');
 
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
+// Middleware to verify JWT token and get user info
+const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -18,15 +11,25 @@ const authenticateToken = (req, res, next) => {
         return res.status(401).json({ error: 'Access token required' });
     }
 
-    // For now, we'll skip JWT verification and get user_id from query params
-    // In production, you'd verify the JWT and extract user_id from it
-    const userId = req.query.user_id || req.body.user_id;
-    if (!userId) {
-        return res.status(400).json({ error: 'User ID required' });
+    // Get user email from request body (following journal route pattern)
+    const userEmail = req.body.user_id || req.query.user_id;
+    if (!userEmail) {
+        return res.status(400).json({ error: 'User email required' });
     }
 
-    req.userId = userId;
-    next();
+    try {
+        // Look up user_id from email (same as journal routes)
+        const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [userEmail]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        req.userId = userResult.rows[0].user_id;
+        next();
+    } catch (error) {
+        console.error('Error looking up user:', error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 };
 
 // GET /api/reminders - Get all reminders for a user
@@ -34,7 +37,7 @@ router.get('/', authenticateToken, async (req, res) => {
     try {
         const { userId } = req;
         
-        const result = await pool.query(
+        const result = await db.query(
             'SELECT * FROM reminders WHERE user_id = $1 ORDER BY time ASC',
             [userId]
         );
@@ -89,7 +92,7 @@ router.post('/', authenticateToken, async (req, res) => {
         const timeDate = new Date(time);
         const timeString = timeDate.toTimeString().split(' ')[0]; // Get HH:MM:SS format
 
-        const result = await pool.query(
+        const result = await db.query(
             `INSERT INTO reminders (user_id, title, type, time, is_enabled, repeat_days)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
@@ -147,7 +150,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         const timeDate = new Date(time);
         const timeString = timeDate.toTimeString().split(' ')[0]; // Get HH:MM:SS format
 
-        const result = await pool.query(
+        const result = await db.query(
             `UPDATE reminders 
              SET title = $1, type = $2, time = $3, is_enabled = $4, repeat_days = $5, updated_at = CURRENT_TIMESTAMP
              WHERE id = $6 AND user_id = $7
@@ -191,7 +194,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         const { userId } = req;
         const { id } = req.params;
 
-        const result = await pool.query(
+        const result = await db.query(
             'DELETE FROM reminders WHERE id = $1 AND user_id = $2 RETURNING *',
             [id, userId]
         );
@@ -230,7 +233,7 @@ router.patch('/:id/toggle', authenticateToken, async (req, res) => {
             });
         }
 
-        const result = await pool.query(
+        const result = await db.query(
             `UPDATE reminders 
              SET is_enabled = $1, updated_at = CURRENT_TIMESTAMP
              WHERE id = $2 AND user_id = $3
