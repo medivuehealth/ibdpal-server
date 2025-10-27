@@ -18,16 +18,21 @@ const authenticateToken = async (req, res, next) => {
     }
 
     try {
+        console.log('🔍 Looking up user with email:', userEmail);
         // Look up user_id from email (same as journal routes)
         const userResult = await db.query('SELECT user_id FROM users WHERE email = $1', [userEmail]);
+        console.log('🔍 User lookup result:', userResult.rows);
+        
         if (userResult.rows.length === 0) {
+            console.log('❌ User not found for email:', userEmail);
             return res.status(404).json({ error: 'User not found' });
         }
         
         req.userId = userResult.rows[0].user_id;
+        console.log('✅ User found, user_id:', req.userId);
         next();
     } catch (error) {
-        console.error('Error looking up user:', error);
+        console.error('❌ Error looking up user:', error);
         return res.status(500).json({ error: 'Database error' });
     }
 };
@@ -115,9 +120,18 @@ router.post('/', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         console.error('Error creating reminder:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            userId: userId,
+            title: title,
+            type: type,
+            time: time
+        });
         res.status(500).json({ 
             success: false, 
-            error: 'Failed to create reminder' 
+            error: 'Failed to create reminder',
+            details: error.message
         });
     }
 });
