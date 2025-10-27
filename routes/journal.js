@@ -120,14 +120,64 @@ async function createJournalEntry(journalData, res) {
             RETURNING entry_id;
         `;
         
+        // Calculate total nutrition - prioritize individual meal fields if available, otherwise use direct values
+        let totalCalories, totalProtein, totalCarbs, totalFiber, totalFat;
+        
+        // Check if individual meal nutrition is provided
+        const hasMealNutrition = journalData.breakfast_calories || journalData.lunch_calories || 
+                                journalData.dinner_calories || journalData.snack_calories ||
+                                journalData.breakfast_protein || journalData.lunch_protein || 
+                                journalData.dinner_protein || journalData.snack_protein;
+        
+        if (hasMealNutrition) {
+            // Calculate from individual meal fields
+            totalCalories = Math.round((parseFloat(journalData.breakfast_calories) || 0) + 
+                                      (parseFloat(journalData.lunch_calories) || 0) + 
+                                      (parseFloat(journalData.dinner_calories) || 0) + 
+                                      (parseFloat(journalData.snack_calories) || 0));
+            totalProtein = Math.round((parseFloat(journalData.breakfast_protein) || 0) + 
+                                     (parseFloat(journalData.lunch_protein) || 0) + 
+                                     (parseFloat(journalData.dinner_protein) || 0) + 
+                                     (parseFloat(journalData.snack_protein) || 0));
+            totalCarbs = Math.round((parseFloat(journalData.breakfast_carbs) || 0) + 
+                                   (parseFloat(journalData.lunch_carbs) || 0) + 
+                                   (parseFloat(journalData.dinner_carbs) || 0) + 
+                                   (parseFloat(journalData.snack_carbs) || 0));
+            totalFiber = Math.round((parseFloat(journalData.breakfast_fiber) || 0) + 
+                                   (parseFloat(journalData.lunch_fiber) || 0) + 
+                                   (parseFloat(journalData.dinner_fiber) || 0) + 
+                                   (parseFloat(journalData.snack_fiber) || 0));
+            totalFat = Math.round((parseFloat(journalData.breakfast_fat) || 0) + 
+                                 (parseFloat(journalData.lunch_fat) || 0) + 
+                                 (parseFloat(journalData.dinner_fat) || 0) + 
+                                 (parseFloat(journalData.snack_fat) || 0));
+        } else {
+            // Use direct values if no individual meal nutrition provided (backward compatibility)
+            totalCalories = Math.round(parseFloat(journalData.calories) || 0);
+            totalProtein = Math.round(parseFloat(journalData.protein) || 0);
+            totalCarbs = Math.round(parseFloat(journalData.carbs) || 0);
+            totalFiber = Math.round(parseFloat(journalData.fiber) || 0);
+            totalFat = Math.round(parseFloat(journalData.fat) || 0);
+        }
+
+        console.log('🔍 Server calculating nutrition totals:', {
+            method: hasMealNutrition ? 'individual_meals' : 'direct_values',
+            breakfast: { cal: journalData.breakfast_calories, protein: journalData.breakfast_protein },
+            lunch: { cal: journalData.lunch_calories, protein: journalData.lunch_protein },
+            dinner: { cal: journalData.dinner_calories, protein: journalData.dinner_protein },
+            snack: { cal: journalData.snack_calories, protein: journalData.snack_protein },
+            direct: { cal: journalData.calories, protein: journalData.protein },
+            totals: { calories: totalCalories, protein: totalProtein, carbs: totalCarbs, fiber: totalFiber, fat: totalFat }
+        });
+
         // Prepare values with proper defaults
         const values = [
             userId,                    // $1 - user_id
             truncatedEntryDate,        // $2 - entry_date
-            Math.round(parseFloat(journalData.calories) || 0), // $3 - calories
-            Math.round(parseFloat(journalData.protein) || 0),  // $4 - protein
-            Math.round(parseFloat(journalData.carbs) || 0),    // $5 - carbs
-            Math.round(parseFloat(journalData.fiber) || 0),    // $6 - fiber
+            totalCalories,             // $3 - calories (calculated from individual meals)
+            totalProtein,              // $4 - protein (calculated from individual meals)
+            totalCarbs,                // $5 - carbs (calculated from individual meals)
+            totalFiber,                // $6 - fiber (calculated from individual meals)
             false,                     // $7 - has_allergens
             4,                         // $8 - meals_per_day
             journalData.hydration_level || 5, // $9 - hydration_level
@@ -213,12 +263,56 @@ async function updateJournalEntry(entryId, journalData, res) {
     let updateValues = [];
     let paramCount = 1;
 
+    // Calculate total nutrition from individual meal fields if any meal nutrition is provided
+    let calculatedCalories = journalData.calories;
+    let calculatedProtein = journalData.protein;
+    let calculatedCarbs = journalData.carbs;
+    let calculatedFiber = journalData.fiber;
+    let calculatedFat = journalData.fat;
+
+    // Check if any individual meal nutrition is provided
+    const hasMealNutrition = journalData.breakfast_calories || journalData.lunch_calories || 
+                            journalData.dinner_calories || journalData.snack_calories ||
+                            journalData.breakfast_protein || journalData.lunch_protein || 
+                            journalData.dinner_protein || journalData.snack_protein;
+
+    if (hasMealNutrition) {
+        calculatedCalories = Math.round((parseFloat(journalData.breakfast_calories) || 0) + 
+                                       (parseFloat(journalData.lunch_calories) || 0) + 
+                                       (parseFloat(journalData.dinner_calories) || 0) + 
+                                       (parseFloat(journalData.snack_calories) || 0));
+        calculatedProtein = Math.round((parseFloat(journalData.breakfast_protein) || 0) + 
+                                      (parseFloat(journalData.lunch_protein) || 0) + 
+                                      (parseFloat(journalData.dinner_protein) || 0) + 
+                                      (parseFloat(journalData.snack_protein) || 0));
+        calculatedCarbs = Math.round((parseFloat(journalData.breakfast_carbs) || 0) + 
+                                    (parseFloat(journalData.lunch_carbs) || 0) + 
+                                    (parseFloat(journalData.dinner_carbs) || 0) + 
+                                    (parseFloat(journalData.snack_carbs) || 0));
+        calculatedFiber = Math.round((parseFloat(journalData.breakfast_fiber) || 0) + 
+                                    (parseFloat(journalData.lunch_fiber) || 0) + 
+                                    (parseFloat(journalData.dinner_fiber) || 0) + 
+                                    (parseFloat(journalData.snack_fiber) || 0));
+        calculatedFat = Math.round((parseFloat(journalData.breakfast_fat) || 0) + 
+                                  (parseFloat(journalData.lunch_fat) || 0) + 
+                                  (parseFloat(journalData.dinner_fat) || 0) + 
+                                  (parseFloat(journalData.snack_fat) || 0));
+
+        console.log('🔍 Server updating nutrition totals:', {
+            breakfast: { cal: journalData.breakfast_calories, protein: journalData.breakfast_protein },
+            lunch: { cal: journalData.lunch_calories, protein: journalData.lunch_protein },
+            dinner: { cal: journalData.dinner_calories, protein: journalData.dinner_protein },
+            snack: { cal: journalData.snack_calories, protein: journalData.snack_protein },
+            calculated: { calories: calculatedCalories, protein: calculatedProtein, carbs: calculatedCarbs, fiber: calculatedFiber, fat: calculatedFat }
+        });
+    }
+
     // Only update fields that are provided (not undefined/null)
     const fieldsToUpdate = {
-        'calories': journalData.calories,
-        'protein': journalData.protein,
-        'carbs': journalData.carbs,
-        'fiber': journalData.fiber,
+        'calories': calculatedCalories,
+        'protein': calculatedProtein,
+        'carbs': calculatedCarbs,
+        'fiber': calculatedFiber,
         'has_allergens': journalData.has_allergens,
         'meals_per_day': journalData.meals_per_day,
         'hydration_level': journalData.hydration_level,
@@ -620,6 +714,50 @@ router.put('/entries/:entryId', async (req, res) => {
             rawData: JSON.stringify(journalData)
         });
 
+        // Calculate total nutrition from individual meal fields if any meal nutrition is provided
+        let calculatedCalories = journalData.calories;
+        let calculatedProtein = journalData.protein;
+        let calculatedCarbs = journalData.carbs;
+        let calculatedFiber = journalData.fiber;
+        let calculatedFat = journalData.fat;
+
+        // Check if any individual meal nutrition is provided
+        const hasMealNutrition = journalData.breakfast_calories || journalData.lunch_calories || 
+                                journalData.dinner_calories || journalData.snack_calories ||
+                                journalData.breakfast_protein || journalData.lunch_protein || 
+                                journalData.dinner_protein || journalData.snack_protein;
+
+        if (hasMealNutrition) {
+            calculatedCalories = Math.round((parseFloat(journalData.breakfast_calories) || 0) + 
+                                           (parseFloat(journalData.lunch_calories) || 0) + 
+                                           (parseFloat(journalData.dinner_calories) || 0) + 
+                                           (parseFloat(journalData.snack_calories) || 0));
+            calculatedProtein = Math.round((parseFloat(journalData.breakfast_protein) || 0) + 
+                                          (parseFloat(journalData.lunch_protein) || 0) + 
+                                          (parseFloat(journalData.dinner_protein) || 0) + 
+                                          (parseFloat(journalData.snack_protein) || 0));
+            calculatedCarbs = Math.round((parseFloat(journalData.breakfast_carbs) || 0) + 
+                                        (parseFloat(journalData.lunch_carbs) || 0) + 
+                                        (parseFloat(journalData.dinner_carbs) || 0) + 
+                                        (parseFloat(journalData.snack_carbs) || 0));
+            calculatedFiber = Math.round((parseFloat(journalData.breakfast_fiber) || 0) + 
+                                        (parseFloat(journalData.lunch_fiber) || 0) + 
+                                        (parseFloat(journalData.dinner_fiber) || 0) + 
+                                        (parseFloat(journalData.snack_fiber) || 0));
+            calculatedFat = Math.round((parseFloat(journalData.breakfast_fat) || 0) + 
+                                      (parseFloat(journalData.lunch_fat) || 0) + 
+                                      (parseFloat(journalData.dinner_fat) || 0) + 
+                                      (parseFloat(journalData.snack_fat) || 0));
+
+            console.log('🔍 Server PUT updating nutrition totals:', {
+                breakfast: { cal: journalData.breakfast_calories, protein: journalData.breakfast_protein },
+                lunch: { cal: journalData.lunch_calories, protein: journalData.lunch_protein },
+                dinner: { cal: journalData.dinner_calories, protein: journalData.dinner_protein },
+                snack: { cal: journalData.snack_calories, protein: journalData.snack_protein },
+                calculated: { calories: calculatedCalories, protein: calculatedProtein, carbs: calculatedCarbs, fiber: calculatedFiber, fat: calculatedFat }
+            });
+        }
+
         // Use the same logic as updateJournalEntry - only update fields that are provided
         let updateFields = [];
         let updateValues = [];
@@ -628,10 +766,10 @@ router.put('/entries/:entryId', async (req, res) => {
         // Only update fields that are provided (not undefined/null)
         const fieldsToUpdate = {
             'entry_date': journalData.entry_date,
-            'calories': journalData.calories,
-            'protein': journalData.protein,
-            'carbs': journalData.carbs,
-            'fiber': journalData.fiber,
+            'calories': calculatedCalories,
+            'protein': calculatedProtein,
+            'carbs': calculatedCarbs,
+            'fiber': calculatedFiber,
             'has_allergens': journalData.has_allergens,
             'meals_per_day': journalData.meals_per_day,
             'hydration_level': journalData.hydration_level,
