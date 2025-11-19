@@ -216,6 +216,61 @@ class SMSService {
       req.end();
     });
   }
+
+  /**
+   * Send password reset code via SMS
+   * @param {string} phoneNumber - Recipient phone number
+   * @param {string} resetCode - 6-digit reset code
+   * @param {string} firstName - User's first name
+   * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
+   */
+  async sendPasswordResetSMS(phoneNumber, resetCode, firstName = 'User') {
+    try {
+      console.log('📱 Password reset SMS requested');
+      console.log('   Method: sendPasswordResetSMS');
+      console.log('   Parameters:', { phoneNumber, resetCode, firstName });
+      
+      if (!this.initialized) {
+        this.initializeService();
+      }
+      
+      if (!this.hasTwilioCredentials) {
+        console.log(`📱 Password reset code for ${phoneNumber}: ${resetCode}`);
+        console.log(`📱 SMS would be sent to: ${phoneNumber}`);
+        return { 
+          success: true, 
+          message: 'Password reset code logged to console',
+          code: resetCode // Return code for testing
+        };
+      }
+
+      // Validate phone number
+      if (!phoneNumber) {
+        throw new Error('Phone number is required');
+      }
+
+      // Format phone number
+      const formattedPhone = this.formatPhoneNumber(phoneNumber);
+      console.log(`📱 Formatted phone number: ${formattedPhone}`);
+
+      // Create SMS message
+      const message = `Your IBDPal password reset code is: ${resetCode}\n\nThis code will expire in 15 minutes.\n\nIf you didn't request a password reset, please ignore this message.`;
+
+      // Send via Twilio API
+      const result = await this.sendViaTwilioAPI(formattedPhone, message);
+      
+      console.log('✅ Password reset SMS sent successfully');
+      return result;
+    } catch (error) {
+      console.error('📱 Password reset SMS sending failed:', error);
+      console.log(`📱 Password reset code for ${phoneNumber}: ${resetCode}`);
+      return { 
+        success: false, 
+        error: error.message,
+        code: resetCode // Return code for fallback
+      };
+    }
+  }
 }
 
 module.exports = new SMSService();

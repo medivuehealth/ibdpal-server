@@ -855,55 +855,60 @@ router.put('/users/password', authenticateToken, async (req, res) => {
   }
 });
 
-// Forgot password - request reset code
+// Forgot password - request reset code (supports both email and phone)
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, phoneNumber } = req.body;
 
-    if (!email) {
+    if (!email && !phoneNumber) {
       return res.status(400).json({
-        error: 'Email required',
-        message: 'Email address is required.'
+        error: 'Identifier required',
+        message: 'Email address or phone number is required.'
       });
     }
 
-    // Find user by email
-    const userResult = await db.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
+    let user;
+    let identifier;
 
-    if (userResult.rows.length === 0) {
-      // Don't reveal if user exists or not (security best practice)
-      return res.json({
-        message: 'If an account exists with this email, a password reset code has been sent.'
-      });
+    // Find user by email or phone
+    if (phoneNumber) {
+      const formattedPhone = smsService.formatPhoneNumber(phoneNumber);
+      identifier = formattedPhone;
+      const userResult = await db.query(
+        'SELECT * FROM users WHERE phone_number = $1',
+        [formattedPhone]
+      );
+      
+      if (userResult.rows.length === 0) {
+        // Don't reveal if user exists or not (security best practice)
+        return res.json({
+          message: 'If an account exists with this phone number, a password reset code has been sent.'
+        });
+      }
+      user = userResult.rows[0];
+    } else if (email) {
+      identifier = email;
+      const userResult = await db.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+      
+      if (userResult.rows.length === 0) {
+        // Don't reveal if user exists or not (security best practice)
+        return res.json({
+          message: 'If an account exists with this email, a password reset code has been sent.'
+        });
+      }
+      user = userResult.rows[0];
     }
 
-    const user = userResult.rows[0];
-
-    // Check if email is verified
+    // Check if account is verified
     if (!user.email_verified) {
       return res.status(400).json({
-        error: 'Email not verified',
-        message: 'Please verify your email address before resetting your password.'
+        error: 'Account not verified',
+        message: 'Please verify your account before resetting your password.'
       });
     }
-
-    // Rate limiting removed for app store release (scaling handled by Railway)
-    // const lastResetRequest = user.last_verification_attempt;
-    // if (lastResetRequest) {
-    //   const timeSinceLastRequest = Date.now() - new Date(lastResetRequest).getTime();
-    //   const resetCooldown = 60 * 60 * 1000; // 1 hour
-    //
-    //   if (timeSinceLastRequest < resetCooldown) {
-    //     const remainingTime = Math.ceil((resetCooldown - timeSinceLastRequest) / 1000 / 60);
-    //     return res.status(429).json({
-    //       error: 'Rate limited',
-    //       message: `Please wait ${remainingTime} minutes before requesting another reset code.`
-    //     });
-    //   }
-    // }
 
     // Generate reset code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -919,13 +924,25 @@ router.post('/forgot-password', async (req, res) => {
       [resetCode, resetCodeExpires, user.user_id]
     );
 
-    // Send password reset email
-    await emailService.sendPasswordResetEmail(email, resetCode, user.first_name || 'User');
-
-    res.json({
-      message: 'If an account exists with this email, a password reset code has been sent.',
-      email: email
-    });
+    // Send password reset code via SMS if phone number provided, otherwise email
+    if (phoneNumber && user.phone_number) {
+      await smsService.sendPasswordResetSMS(user.phone_number, resetCode, user.first_name || 'User');
+      res.json({
+        message: 'If an account exists with this phone number, a password reset code has been sent.',
+        phoneNumber: user.phone_number
+      });
+    } else if (email && user.email) {
+      await emailService.sendPasswordResetEmail(user.email, resetCode, user.first_name || 'User');
+      res.json({
+        message: 'If an account exists with this email, a password reset code has been sent.',
+        email: user.email
+      });
+    } else {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Unable to determine reset method.'
+      });
+    }
 
   } catch (error) {
     console.error('Forgot password error:', error);
@@ -936,15 +953,15 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password with code
+// Reset password with code (supports both email and phone)
 router.post('/reset-password', async (req, res) => {
   try {
-    const { email, resetCode, newPassword } = req.body;
+    const { email, phoneNumber, resetCode, newPassword } = req.body;
 
-    if (!email || !resetCode || !newPassword) {
+    if ((!email && !phoneNumber) || !resetCode || !newPassword) {
       return res.status(400).json({
         error: 'Missing required fields',
-        message: 'Email, reset code, and new password are required.'
+        message: 'Email or phone number, reset code, and new password are required.'
       });
     }
 
@@ -955,20 +972,37 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    // Find user by email
-    const userResult = await db.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
+    let user;
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'User not found',
-        message: 'No account found with this email address.'
-      });
+    // Find user by email or phone
+    if (phoneNumber) {
+      const formattedPhone = smsService.formatPhoneNumber(phoneNumber);
+      const userResult = await db.query(
+        'SELECT * FROM users WHERE phone_number = $1',
+        [formattedPhone]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'No account found with this phone number.'
+        });
+      }
+      user = userResult.rows[0];
+    } else if (email) {
+      const userResult = await db.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'No account found with this email address.'
+        });
+      }
+      user = userResult.rows[0];
     }
-
-    const user = userResult.rows[0];
 
     // Check if email is verified
     if (!user.email_verified) {
