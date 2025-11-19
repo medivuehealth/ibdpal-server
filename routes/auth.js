@@ -254,6 +254,18 @@ router.post('/login', validateLogin, formatValidationErrors, async (req, res) =>
       });
     }
 
+    // Check account status and reactivate if inactive
+    if (user.account_status === 'inactive') {
+      // Reactivate the account
+      await db.query(
+        `UPDATE users 
+         SET account_status = 'active', updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1`,
+        [user.user_id]
+      );
+      console.log(`Account reactivated for user: ${user.email}`);
+    }
+
     // Check if account is locked
     if (user.account_locked) {
       return res.status(423).json({
@@ -688,6 +700,174 @@ router.put('/users/password', authenticateToken, async (req, res) => {
     res.status(500).json({
       error: 'Password change failed',
       message: 'Unable to change password. Please try again.'
+    });
+  }
+});
+
+// Forgot password - request reset code
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email required',
+        message: 'Email address is required.'
+      });
+    }
+
+    // Find user by email
+    const userResult = await db.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      // Don't reveal if user exists or not (security best practice)
+      return res.json({
+        message: 'If an account exists with this email, a password reset code has been sent.'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if email is verified
+    if (!user.email_verified) {
+      return res.status(400).json({
+        error: 'Email not verified',
+        message: 'Please verify your email address before resetting your password.'
+      });
+    }
+
+    // Check rate limit (max 3 requests per hour)
+    const lastResetRequest = user.last_verification_attempt;
+    if (lastResetRequest) {
+      const timeSinceLastRequest = Date.now() - new Date(lastResetRequest).getTime();
+      const resetCooldown = 60 * 60 * 1000; // 1 hour
+
+      if (timeSinceLastRequest < resetCooldown) {
+        const remainingTime = Math.ceil((resetCooldown - timeSinceLastRequest) / 1000 / 60);
+        return res.status(429).json({
+          error: 'Rate limited',
+          message: `Please wait ${remainingTime} minutes before requesting another reset code.`
+        });
+      }
+    }
+
+    // Generate reset code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Store reset code in verification_code field (reusing existing infrastructure)
+    await db.query(
+      `UPDATE users 
+       SET verification_code = $1, 
+           verification_code_expires = $2,
+           last_verification_attempt = CURRENT_TIMESTAMP
+       WHERE user_id = $3`,
+      [resetCode, resetCodeExpires, user.user_id]
+    );
+
+    // Send password reset email
+    await emailService.sendPasswordResetEmail(email, resetCode, user.first_name || 'User');
+
+    res.json({
+      message: 'If an account exists with this email, a password reset code has been sent.',
+      email: email
+    });
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      error: 'Request failed',
+      message: 'Unable to process password reset request. Please try again.'
+    });
+  }
+});
+
+// Reset password with code
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, resetCode, newPassword } = req.body;
+
+    if (!email || !resetCode || !newPassword) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email, reset code, and new password are required.'
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        error: 'Invalid password',
+        message: 'Password must be at least 8 characters long.'
+      });
+    }
+
+    // Find user by email
+    const userResult = await db.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No account found with this email address.'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if email is verified
+    if (!user.email_verified) {
+      return res.status(400).json({
+        error: 'Email not verified',
+        message: 'Please verify your email address before resetting your password.'
+      });
+    }
+
+    // Check if code matches and is not expired
+    if (user.verification_code !== resetCode) {
+      return res.status(400).json({
+        error: 'Invalid code',
+        message: 'Invalid reset code. Please check your email and try again.'
+      });
+    }
+
+    if (new Date() > new Date(user.verification_code_expires)) {
+      return res.status(400).json({
+        error: 'Code expired',
+        message: 'Reset code has expired. Please request a new code.'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password and clear reset code
+    await db.query(
+      `UPDATE users 
+       SET password_hash = $1,
+           verification_code = NULL,
+           verification_code_expires = NULL,
+           last_verification_attempt = NULL,
+           password_last_changed = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [newPasswordHash, user.user_id]
+    );
+
+    res.json({
+      message: 'Password reset successfully. You can now login with your new password.'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      error: 'Reset failed',
+      message: 'Unable to reset password. Please try again.'
     });
   }
 });
