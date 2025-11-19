@@ -44,43 +44,46 @@ class EmailService {
     console.log(`📧 EMAIL_SENDER: ${process.env.EMAIL_SENDER || 'NOT SET'}`);
     console.log(`📧 DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
     
-    if (process.env.NODE_ENV === 'production') {
-      // Check for SendGrid API key first (preferred method)
-      // Try multiple possible variable names for SendGrid (non-sensitive)
-      const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.MAIL_SERVICE_KEY || process.env.EMAIL_PROVIDER_KEY || process.env.SENDGRID_API_KEY;
-      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+    // Check for SendGrid API key first (preferred method) - works in both dev and production
+    // Try multiple possible variable names for SendGrid (non-sensitive)
+    const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.MAIL_SERVICE_KEY || process.env.EMAIL_PROVIDER_KEY || process.env.SENDGRID_API_KEY;
+    const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+    
+    // Validate both key and fromEmail are present before using SendGrid
+    if (sendgridKey && fromEmail) {
+      console.log('📧 Configuring SendGrid email service...');
+      console.log(`📧 From Email: ${fromEmail}`);
+      this.hasSendGridCredentials = true;
       
-                   if (sendgridKey) {
-               console.log('📧 Configuring SendGrid email service...');
-               this.hasSendGridCredentials = true;
-               
-               // Use API as default, SMTP as fallback
-               console.log('📧 Using SendGrid API as primary method...');
-               this.transporter = null; // No SMTP transporter needed for API
-               this.initialized = true;
-               console.log('✅ SendGrid API configured successfully');
-             }
-      // Fallback to SMTP credentials if SendGrid not configured
-      else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-        console.log('📧 Configuring SMTP email service...');
-        this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || 'smtp.gmail.com',
-          port: process.env.SMTP_PORT || 587,
-          secure: false, // true for 465, false for other ports
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-          }
-        });
-        console.log('📧 SMTP email service initialized');
-        this.initialized = true;
+      // Use API as default, SMTP as fallback
+      console.log('📧 Using SendGrid API as primary method...');
+      this.transporter = null; // No SMTP transporter needed for API
+      this.initialized = true;
+      console.log('✅ SendGrid API configured successfully');
+    }
+    // Fallback to SMTP credentials if SendGrid not configured
+    else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      console.log('📧 Configuring SMTP email service...');
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: process.env.SMTP_PORT || 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        }
+      });
+      console.log('📧 SMTP email service initialized');
+      this.initialized = true;
+    } else {
+      // Development: Use Ethereal Email (fake SMTP for testing) if in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📧 Configuring development email service (Ethereal)...');
+        await this.createTestAccount();
       } else {
         console.log('📧 No email credentials provided, using console logging fallback');
+        this.initialized = true; // Mark as initialized even without credentials
       }
-    } else {
-      // Development: Use Ethereal Email (fake SMTP for testing)
-      console.log('📧 Configuring development email service...');
-      await this.createTestAccount();
     }
   }
 
@@ -177,6 +180,14 @@ class EmailService {
       
       // Use API as default, SMTP as fallback
       if (this.hasSendGridCredentials) {
+        // Validate fromEmail before attempting to send
+        if (!fromEmail) {
+          console.error('❌ From email is not configured. Cannot send email via SendGrid API.');
+          console.log(`📧 Verification code for ${email}: ${verificationCode}`);
+          console.log(`📧 Email would be sent to: ${email}`);
+          return { success: false, error: 'From email address is not configured. Please set EMAIL_SENDER or FROM_EMAIL environment variable', message: 'Verification code logged to console' };
+        }
+        
         console.log('   Step 5.6: Using SendGrid API as primary method...');
         try {
           const result = await this.sendViaSendGridAPI(email, verificationCode, firstName, fromEmail);
@@ -328,6 +339,17 @@ IBDPal - Educational IBD Management Tool
     const https = require('https');
     const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.SENDGRID_API_KEY;
     
+    // Validate required parameters
+    if (!sendgridKey) {
+      throw new Error('SendGrid API key is not configured');
+    }
+    if (!fromEmail) {
+      throw new Error('From email address is not configured. Please set EMAIL_SENDER or FROM_EMAIL environment variable');
+    }
+    if (!email) {
+      throw new Error('Recipient email address is required');
+    }
+    
     const emailData = {
       personalizations: [{
         to: [{ email: email }],
@@ -396,6 +418,224 @@ IBDPal - Educational IBD Management Tool
       
       req.setTimeout(10000, () => {
         console.log('❌ SendGrid API timeout');
+        req.destroy();
+        reject(new Error('SendGrid API timeout'));
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  async sendPasswordResetEmail(email, resetCode, firstName = 'User') {
+    try {
+      console.log('🔍 Password reset email requested');
+      console.log('   Method: sendPasswordResetEmail');
+      console.log('   Parameters:', { email, resetCode, firstName });
+      
+      // If not initialized yet, try to initialize
+      if (!this.initialized) {
+        console.log('📧 Email service not initialized, attempting to initialize...');
+        await this.initializeTransporter();
+      }
+      
+      if (!this.transporter && !this.hasSendGridCredentials) {
+        console.log(`📧 Password reset code for ${email}: ${resetCode}`);
+        console.log(`📧 Email would be sent to: ${email}`);
+        return { success: true, message: 'Password reset code logged to console' };
+      }
+
+      const fromEmail = process.env.EMAIL_SENDER || process.env.MAIL_SENDER || process.env.SENDER_EMAIL || process.env.FROM_EMAIL;
+      
+      const mailOptions = {
+        from: fromEmail || '"IBDPal" <your-gmail@gmail.com>',
+        to: email,
+        subject: 'Reset Your IBDPal Password',
+        html: this.getPasswordResetEmailTemplate(resetCode, firstName),
+        text: this.getPasswordResetEmailText(resetCode, firstName)
+      };
+
+      // Use API as default, SMTP as fallback
+      if (this.hasSendGridCredentials) {
+        // Validate fromEmail before attempting to send
+        if (!fromEmail) {
+          console.error('❌ From email is not configured. Cannot send email via SendGrid API.');
+          console.log(`📧 Password reset code for ${email}: ${resetCode}`);
+          return { success: false, error: 'From email address is not configured. Please set EMAIL_SENDER or FROM_EMAIL environment variable', message: 'Password reset code logged to console' };
+        }
+        
+        try {
+          const result = await this.sendPasswordResetViaSendGridAPI(email, resetCode, firstName, fromEmail);
+          return result;
+        } catch (apiError) {
+          console.error('API failed, trying SMTP fallback...');
+          console.error('API Error:', apiError.message);
+          
+          if (this.transporter) {
+            try {
+              const sendPromise = this.transporter.sendMail(mailOptions);
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('SMTP timeout after 10 seconds')), 10000);
+              });
+              
+              const info = await Promise.race([sendPromise, timeoutPromise]);
+              return { success: true, messageId: info.messageId };
+            } catch (smtpError) {
+              console.error('SMTP fallback also failed');
+              console.error('SMTP Error:', smtpError.message);
+              throw smtpError;
+            }
+          } else {
+            throw apiError;
+          }
+        }
+      } else {
+        console.log(`📧 Password reset code for ${email}: ${resetCode}`);
+        return { success: true, message: 'Password reset code logged to console' };
+      }
+    } catch (error) {
+      console.error('📧 Password reset email sending failed:', error);
+      console.log(`📧 Password reset code for ${email}: ${resetCode}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  getPasswordResetEmailTemplate(resetCode, firstName) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your IBDPal Password</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+          .header { background: #4CAF50; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .code { background: #fff; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #4CAF50; border: 2px solid #4CAF50; border-radius: 5px; margin: 20px 0; letter-spacing: 2px; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background: #f5f5f5; }
+          .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Reset Your IBDPal Password</h1>
+          </div>
+          <div class="content">
+            <p>Hello ${firstName},</p>
+            <p>We received a request to reset your password. Use the code below to reset your password:</p>
+            
+            <div class="code">${resetCode}</div>
+            
+            <p><strong>This code will expire in 15 minutes for security reasons.</strong></p>
+            
+            <div class="warning">
+              <strong>Security Notice:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+            </div>
+            
+            <p>Best regards,<br>The IBDPal Team</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>IBDPal - Educational IBD Management Tool</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getPasswordResetEmailText(resetCode, firstName) {
+    return `
+Reset Your IBDPal Password
+
+Hello ${firstName},
+
+We received a request to reset your password. Use the code below to reset your password:
+
+${resetCode}
+
+This code will expire in 15 minutes for security reasons.
+
+Security Notice: If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+
+Best regards,
+The IBDPal Team
+
+---
+This is an automated message. Please do not reply to this email.
+IBDPal - Educational IBD Management Tool
+    `;
+  }
+
+  async sendPasswordResetViaSendGridAPI(email, resetCode, firstName, fromEmail) {
+    const https = require('https');
+    const sendgridKey = process.env.EMAIL_SERVICE_KEY || process.env.SENDGRID_API_KEY;
+    
+    // Validate required parameters
+    if (!sendgridKey) {
+      throw new Error('SendGrid API key is not configured');
+    }
+    if (!fromEmail) {
+      throw new Error('From email address is not configured. Please set EMAIL_SENDER or FROM_EMAIL environment variable');
+    }
+    if (!email) {
+      throw new Error('Recipient email address is required');
+    }
+    
+    const emailData = {
+      personalizations: [{
+        to: [{ email: email }],
+        subject: 'Reset Your IBDPal Password'
+      }],
+      from: { email: fromEmail, name: 'IBDPal' },
+      content: [{
+        type: 'text/html',
+        value: this.getPasswordResetEmailTemplate(resetCode, firstName)
+      }]
+    };
+
+    const postData = JSON.stringify(emailData);
+    
+    const options = {
+      hostname: 'api.sendgrid.com',
+      port: 443,
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sendgridKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode === 202) {
+            console.log('✅ SendGrid API password reset email sent successfully');
+            resolve({ success: true, messageId: `api-${Date.now()}` });
+          } else {
+            console.error('❌ SendGrid API error:', res.statusCode, data);
+            reject(new Error(`SendGrid API error: ${res.statusCode} - ${data}`));
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('❌ SendGrid API request error:', error.message);
+        reject(error);
+      });
+      
+      req.setTimeout(10000, () => {
         req.destroy();
         reject(new Error('SendGrid API timeout'));
       });
