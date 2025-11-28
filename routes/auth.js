@@ -133,6 +133,27 @@ router.post('/register', validateRegistration, async (req, res) => {
     const smsResult = await smsService.sendVerificationSMS(formattedPhone, verificationCode, firstName);
     console.log('📱 SMS service result:', smsResult);
 
+    // Check if SMS was sent successfully
+    if (!smsResult.success) {
+      // SMS failed - rollback user creation and return error
+      await db.query('DELETE FROM users WHERE user_id = $1', [user.user_id]);
+      
+      // Determine appropriate error message
+      let errorMessage = 'Failed to send verification code. Please try again.';
+      if (smsResult.error === 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER') {
+        errorMessage = 'Unable to send verification SMS. Please contact support or try again later.';
+        console.error('❌ Registration failed: Twilio trial account restriction');
+      } else {
+        console.error('❌ Registration failed: SMS sending error:', smsResult.error);
+      }
+      
+      return res.status(500).json({
+        error: 'SMS delivery failed',
+        message: errorMessage,
+        details: 'Verification code could not be sent. Please ensure your phone number is correct and try again.'
+      });
+    }
+
     // Log registration attempt
     await db.query(
       `INSERT INTO login_history (user_id, success, ip_address, user_agent)
@@ -925,7 +946,25 @@ router.post('/forgot-password', async (req, res) => {
 
     // Send password reset code via SMS if phone number provided, otherwise email
     if (phoneNumber && user.phone_number) {
-      await smsService.sendPasswordResetSMS(user.phone_number, resetCode, user.first_name || 'User');
+      const smsResult = await smsService.sendPasswordResetSMS(user.phone_number, resetCode, user.first_name || 'User');
+      
+      if (!smsResult.success) {
+        // Clear the reset code since SMS failed
+        await db.query(
+          `UPDATE users 
+           SET verification_code = NULL, 
+               verification_code_expires = NULL
+           WHERE user_id = $1`,
+          [user.user_id]
+        );
+        
+        return res.status(500).json({
+          error: 'SMS delivery failed',
+          message: 'Unable to send password reset code via SMS. Please try again or use email instead.',
+          details: 'SMS service is temporarily unavailable. Please try again later.'
+        });
+      }
+      
       res.json({
         message: 'If an account exists with this phone number, a password reset code has been sent.',
         phoneNumber: user.phone_number
@@ -1163,6 +1202,24 @@ router.post('/resend-verification', async (req, res) => {
     if (phoneNumber && user.phone_number) {
       const smsResult = await smsService.sendVerificationSMS(user.phone_number, verificationCode, user.first_name || 'User');
       console.log('📱 Resend SMS service result:', smsResult);
+      
+      if (!smsResult.success) {
+        // Clear the verification code since SMS failed
+        await db.query(
+          `UPDATE users 
+           SET verification_code = NULL, 
+               verification_code_expires = NULL
+           WHERE user_id = $1`,
+          [user.user_id]
+        );
+        
+        return res.status(500).json({
+          error: 'SMS delivery failed',
+          message: 'Unable to send verification code via SMS. Please try again or use email instead.',
+          details: 'SMS service is temporarily unavailable. Please try again later.'
+        });
+      }
+      
       res.json({
         message: 'Verification code has been resent. Please check your phone.',
         phoneNumber: user.phone_number

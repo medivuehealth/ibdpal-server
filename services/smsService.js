@@ -118,23 +118,25 @@ class SMSService {
       console.error('📱 SMS sending failed:', error);
       console.log(`📱 Verification code for ${phoneNumber}: ${verificationCode}`);
       
-      // Handle Twilio trial account unverified number error gracefully
+      // Handle Twilio trial account unverified number error
       if (error.message === 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER') {
         console.warn('⚠️  SMS not sent due to Twilio trial account restrictions');
         console.warn('   The verification code is still valid and has been logged above');
-        // Return success with a warning - code is still valid
+        console.warn('   For production: Upgrade Twilio account or verify phone numbers');
+        // Return failure with specific error code for handling
         return { 
-          success: true, 
-          warning: 'SMS not sent - Twilio trial account cannot send to unverified numbers. Code logged for testing.',
-          code: verificationCode,
-          messageId: null
+          success: false, 
+          error: 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER',
+          errorMessage: 'SMS cannot be sent to unverified numbers on trial account. Please upgrade Twilio account or verify the phone number.',
+          code: verificationCode // Still return code for debugging
         };
       }
       
       return { 
         success: false, 
         error: error.message,
-        code: verificationCode // Return code for fallback
+        errorMessage: `Failed to send SMS: ${error.message}`,
+        code: verificationCode // Return code for debugging
       };
     }
   }
@@ -290,10 +292,26 @@ class SMSService {
     } catch (error) {
       console.error('📱 Password reset SMS sending failed:', error);
       console.log(`📱 Password reset code for ${phoneNumber}: ${resetCode}`);
+      
+      // Handle Twilio trial account unverified number error
+      if (error.message === 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER') {
+        console.warn('⚠️  SMS not sent due to Twilio trial account restrictions');
+        console.warn('   The password reset code is still valid and has been logged above');
+        console.warn('   For production: Upgrade Twilio account or verify phone numbers');
+        // Return failure with specific error code for handling
+        return { 
+          success: false, 
+          error: 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER',
+          errorMessage: 'SMS cannot be sent to unverified numbers on trial account. Please upgrade Twilio account or verify the phone number.',
+          code: resetCode // Still return code for debugging
+        };
+      }
+      
       return { 
         success: false, 
         error: error.message,
-        code: resetCode // Return code for fallback
+        errorMessage: `Failed to send SMS: ${error.message}`,
+        code: resetCode // Return code for debugging
       };
     }
   }
