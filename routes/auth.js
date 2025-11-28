@@ -84,52 +84,79 @@ router.post('/register', validateRegistration, async (req, res) => {
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
       
-      // If account exists but is not verified, resend verification code
+      // If account exists but is not verified, check if verification code is still valid
       if (!user.email_verified && user.account_status === 'pending_verification') {
-        console.log('🔄 Unverified account detected - resending verification code');
+        const now = new Date();
+        const codeExpires = user.verification_code_expires ? new Date(user.verification_code_expires) : null;
+        const codeValid = codeExpires && now < codeExpires;
+        const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
         
-        // Generate new verification code
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-        
-        // Update verification code and expiration
-        await db.query(
-          `UPDATE users 
-           SET verification_code = $1, 
-               verification_code_expires = $2,
-               last_verification_attempt = CURRENT_TIMESTAMP
-           WHERE user_id = $3`,
-          [verificationCode, verificationExpires, user.user_id]
-        );
-        
-        // Send new verification SMS
-        const smsResult = await smsService.sendVerificationSMS(
-          user.phone_number, 
-          verificationCode, 
-          user.first_name || 'User'
-        );
-        
-        if (!smsResult.success) {
-          return res.status(500).json({
-            error: 'SMS delivery failed',
-            message: 'Unable to send verification code. Please try again later.',
-            details: 'Verification code could not be sent. Please ensure your phone number is correct and try again.'
+        if (codeValid && user.verification_code) {
+          // Code is still valid (within 24 hours) - prompt user to enter existing code
+          console.log('✅ Existing verification code is still valid');
+          const timeRemaining = Math.floor((codeExpires.getTime() - now.getTime()) / 1000 / 60); // minutes
+          
+          return res.status(200).json({
+            message: 'Please enter the verification code sent to your phone.',
+            requiresVerification: true,
+            codeStillValid: true,
+            timeRemainingMinutes: timeRemaining,
+            user: {
+              id: user.user_id,
+              email: user.email,
+              phoneNumber: user.phone_number,
+              firstName: user.first_name,
+              lastName: user.last_name
+            }
+          });
+        } else {
+          // Code expired or doesn't exist - generate and send new code
+          console.log('🔄 Verification code expired or missing - generating new code');
+          
+          // Generate new verification code
+          const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+          const verificationExpires = new Date(Date.now() + twentyFourHours); // 24 hours
+          
+          // Update verification code and expiration
+          await db.query(
+            `UPDATE users 
+             SET verification_code = $1, 
+                 verification_code_expires = $2,
+                 last_verification_attempt = CURRENT_TIMESTAMP
+             WHERE user_id = $3`,
+            [verificationCode, verificationExpires, user.user_id]
+          );
+          
+          // Send new verification SMS
+          const smsResult = await smsService.sendVerificationSMS(
+            user.phone_number, 
+            verificationCode, 
+            user.first_name || 'User'
+          );
+          
+          if (!smsResult.success) {
+            return res.status(500).json({
+              error: 'SMS delivery failed',
+              message: 'Unable to send verification code. Please try again later.',
+              details: 'Verification code could not be sent. Please ensure your phone number is correct and try again.'
+            });
+          }
+          
+          // Return success response indicating verification code was resent
+          return res.status(200).json({
+            message: 'A new verification code has been sent to your phone. Please enter it to complete registration.',
+            requiresVerification: true,
+            isResend: true,
+            codeStillValid: false,
+            user: {
+              id: user.user_id,
+              email: user.email,
+              phoneNumber: user.phone_number,
+              firstName: user.first_name,
+              lastName: user.last_name
+            }
           });
         }
-        
-        // Return success response indicating verification code was resent
-        return res.status(200).json({
-          message: 'A new verification code has been sent to your phone.',
-          requiresVerification: true,
-          isResend: true,
-          user: {
-            id: user.user_id,
-            email: user.email,
-            phoneNumber: user.phone_number,
-            firstName: user.first_name,
-            lastName: user.last_name
-          }
-        });
       }
       
       // Account exists and is verified - return error
@@ -147,7 +174,7 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     // Generate verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
     // Create user with SMS verification
     const newUser = await db.query(
