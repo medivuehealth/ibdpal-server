@@ -117,6 +117,20 @@ class SMSService {
     } catch (error) {
       console.error('📱 SMS sending failed:', error);
       console.log(`📱 Verification code for ${phoneNumber}: ${verificationCode}`);
+      
+      // Handle Twilio trial account unverified number error gracefully
+      if (error.message === 'TRIAL_ACCOUNT_UNVERIFIED_NUMBER') {
+        console.warn('⚠️  SMS not sent due to Twilio trial account restrictions');
+        console.warn('   The verification code is still valid and has been logged above');
+        // Return success with a warning - code is still valid
+        return { 
+          success: true, 
+          warning: 'SMS not sent - Twilio trial account cannot send to unverified numbers. Code logged for testing.',
+          code: verificationCode,
+          messageId: null
+        };
+      }
+      
       return { 
         success: false, 
         error: error.message,
@@ -193,7 +207,19 @@ class SMSService {
             console.error('❌ Twilio API error:', res.statusCode, data);
             try {
               const errorResponse = JSON.parse(data);
-              reject(new Error(`Twilio API error: ${res.statusCode} - ${errorResponse.message || data}`));
+              const errorMessage = errorResponse.message || data;
+              const errorCode = errorResponse.code;
+              
+              // Check if it's a trial account unverified number error
+              if (errorCode === 21608 || errorMessage.includes('unverified')) {
+                console.warn('⚠️  Twilio Trial Account: Cannot send to unverified number');
+                console.warn('   To fix: Verify the number at https://www.twilio.com/user/account/phone-numbers/verified');
+                console.warn('   Or upgrade to a paid Twilio account');
+                // Return a special error that we can handle gracefully
+                reject(new Error('TRIAL_ACCOUNT_UNVERIFIED_NUMBER'));
+              } else {
+                reject(new Error(`Twilio API error: ${res.statusCode} - ${errorMessage}`));
+              }
             } catch (parseError) {
               reject(new Error(`Twilio API error: ${res.statusCode} - ${data}`));
             }

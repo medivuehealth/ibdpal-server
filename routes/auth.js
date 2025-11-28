@@ -381,13 +381,17 @@ router.post('/logout', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    // Log logout
+    // Log logout - update the most recent login entry without logout timestamp
     await db.query(
       `UPDATE login_history 
        SET logout_timestamp = CURRENT_TIMESTAMP 
-       WHERE user_id = $1 AND logout_timestamp IS NULL 
-       ORDER BY login_timestamp DESC 
-       LIMIT 1`,
+       WHERE id = (
+         SELECT id 
+         FROM login_history 
+         WHERE user_id = $1 AND logout_timestamp IS NULL 
+         ORDER BY login_timestamp DESC 
+         LIMIT 1
+       )`,
       [userId]
     );
 
