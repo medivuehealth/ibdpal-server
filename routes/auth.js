@@ -946,6 +946,29 @@ router.post('/forgot-password', async (req, res) => {
 
   } catch (error) {
     console.error('Forgot password error:', error);
+    
+    // Handle database connection errors specifically
+    if (error.message && (
+      error.message.includes('Connection terminated') ||
+      error.message.includes('connection timeout') ||
+      error.message.includes('Connection terminated unexpectedly') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED'
+    )) {
+      return res.status(503).json({
+        error: 'Service temporarily unavailable',
+        message: 'Database connection issue. Please try again in a moment.'
+      });
+    }
+    
+    // Handle other database errors
+    if (error.code && error.code.startsWith('ECONN')) {
+      return res.status(503).json({
+        error: 'Service temporarily unavailable',
+        message: 'Unable to connect to database. Please try again later.'
+      });
+    }
+    
     res.status(500).json({
       error: 'Request failed',
       message: 'Unable to process password reset request. Please try again.'

@@ -13,7 +13,9 @@ const pool = new Pool({
   },
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 30000, // Increased from 2000ms to 30 seconds for production stability
+  // Allow connections to be reused
+  allowExitOnIdle: false,
 });
 
 // Test the connection
