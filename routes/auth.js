@@ -74,14 +74,70 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     // Check if user already exists by email or phone
     const existingUser = await db.query(
-      'SELECT user_id FROM users WHERE email = $1 OR phone_number = $2',
+      `SELECT user_id, email, phone_number, email_verified, account_status, 
+              first_name, last_name, verification_code, verification_code_expires
+       FROM users 
+       WHERE email = $1 OR phone_number = $2`,
       [email, formattedPhone]
     );
 
     if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+      
+      // If account exists but is not verified, resend verification code
+      if (!user.email_verified && user.account_status === 'pending_verification') {
+        console.log('🔄 Unverified account detected - resending verification code');
+        
+        // Generate new verification code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        
+        // Update verification code and expiration
+        await db.query(
+          `UPDATE users 
+           SET verification_code = $1, 
+               verification_code_expires = $2,
+               last_verification_attempt = CURRENT_TIMESTAMP
+           WHERE user_id = $3`,
+          [verificationCode, verificationExpires, user.user_id]
+        );
+        
+        // Send new verification SMS
+        const smsResult = await smsService.sendVerificationSMS(
+          user.phone_number, 
+          verificationCode, 
+          user.first_name || 'User'
+        );
+        
+        if (!smsResult.success) {
+          return res.status(500).json({
+            error: 'SMS delivery failed',
+            message: 'Unable to send verification code. Please try again later.',
+            details: 'Verification code could not be sent. Please ensure your phone number is correct and try again.'
+          });
+        }
+        
+        // Return success response indicating verification code was resent
+        return res.status(200).json({
+          message: 'A new verification code has been sent to your phone.',
+          requiresVerification: true,
+          isResend: true,
+          user: {
+            id: user.user_id,
+            email: user.email,
+            phoneNumber: user.phone_number,
+            firstName: user.first_name,
+            lastName: user.last_name
+          }
+        });
+      }
+      
+      // Account exists and is verified - return error
       return res.status(409).json({
         error: 'User already exists',
-        message: 'An account with this email address or phone number already exists'
+        message: 'An account with this email address or phone number already exists. Please sign in or use the forgot password option.',
+        accountExists: true,
+        isVerified: true
       });
     }
 
