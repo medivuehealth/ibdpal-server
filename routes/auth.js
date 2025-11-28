@@ -902,14 +902,9 @@ router.post('/forgot-password', async (req, res) => {
       user = userResult.rows[0];
     }
 
-    // Check if account is verified
-    if (!user.email_verified) {
-      return res.status(400).json({
-        error: 'Account not verified',
-        message: 'Please verify your account before resetting your password.'
-      });
-    }
-
+    // Allow password reset for both verified and unverified accounts
+    // The reset process itself serves as verification (user must have access to email/phone)
+    
     // Generate reset code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
@@ -1027,14 +1022,9 @@ router.post('/reset-password', async (req, res) => {
       user = userResult.rows[0];
     }
 
-    // Check if email is verified
-    if (!user.email_verified) {
-      return res.status(400).json({
-        error: 'Email not verified',
-        message: 'Please verify your email address before resetting your password.'
-      });
-    }
-
+    // Allow password reset for both verified and unverified accounts
+    // The reset process itself serves as verification (user must have access to email/phone)
+    
     // Check if code matches and is not expired
     if (user.verification_code !== resetCode) {
       return res.status(400).json({
@@ -1054,10 +1044,13 @@ router.post('/reset-password', async (req, res) => {
     const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
 
-    // Update password and clear reset code
+    // Update password, clear reset code, and auto-verify account
+    // Since user received the reset code via email/phone, they've proven ownership
     await db.query(
       `UPDATE users 
        SET password_hash = $1,
+           email_verified = TRUE,
+           account_status = 'active',
            verification_code = NULL,
            verification_code_expires = NULL,
            last_verification_attempt = NULL,
