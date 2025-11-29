@@ -84,6 +84,63 @@ router.post('/register', validateRegistration, async (req, res) => {
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
       
+      // If account is inactive (deleted), allow reactivation through registration
+      if (user.account_status === 'inactive') {
+        console.log(`🔄 Reactivating inactive account for user: ${user.email}`);
+        
+        // Update user info and reactivate account
+        const passwordHash = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
+        
+        // Generate new verification code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        
+        // Update user with new info and set status to pending_verification
+        await db.query(
+          `UPDATE users 
+           SET password_hash = $1,
+               first_name = $2,
+               last_name = $3,
+               phone_number = $4,
+               account_status = 'pending_verification',
+               email_verified = FALSE,
+               verification_code = $5,
+               verification_code_expires = $6,
+               verification_attempts = 0,
+               last_verification_attempt = NULL,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = $7`,
+          [passwordHash, firstName, lastName, formattedPhone, verificationCode, verificationExpires, user.user_id]
+        );
+        
+        // Send verification SMS
+        const smsResult = await smsService.sendVerificationSMS(
+          formattedPhone,
+          verificationCode,
+          firstName
+        );
+        
+        if (!smsResult.success) {
+          return res.status(500).json({
+            error: 'SMS delivery failed',
+            message: 'Unable to send verification code. Please try again later.'
+          });
+        }
+        
+        return res.status(200).json({
+          message: 'Account reactivated. Please check your phone for verification code.',
+          requiresVerification: true,
+          isReactivation: true,
+          user: {
+            id: user.user_id,
+            email: user.email,
+            phoneNumber: formattedPhone,
+            firstName: firstName,
+            lastName: lastName
+          }
+        });
+      }
+      
       // If account exists but is not verified, check if verification code is still valid
       if (!user.email_verified && user.account_status === 'pending_verification') {
         const now = new Date();
