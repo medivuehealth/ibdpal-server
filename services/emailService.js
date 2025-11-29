@@ -529,7 +529,7 @@ IBDPal - Educational IBD Management Tool
             
             <div class="code">${resetCode}</div>
             
-            <p><strong>This code will expire in 15 minutes for security reasons.</strong></p>
+            <p><strong>This code will expire in 24 hours for security reasons.</strong></p>
             
             <div class="warning">
               <strong>Security Notice:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
@@ -557,7 +557,7 @@ We received a request to reset your password. Use the code below to reset your p
 
 ${resetCode}
 
-This code will expire in 15 minutes for security reasons.
+This code will expire in 24 hours for security reasons.
 
 Security Notice: If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
 
