@@ -1071,7 +1071,7 @@ router.post('/forgot-password', async (req, res) => {
       user = userResult.rows[0];
     }
 
-    // Reject password reset for deleted/inactive accounts
+    // Reject password reset for deleted/inactive accounts BEFORE sending SMS/email
     if (user.account_status === 'inactive') {
       // Don't reveal that account is deleted (security best practice)
       return res.json({
@@ -1082,9 +1082,9 @@ router.post('/forgot-password', async (req, res) => {
     // Allow password reset for both verified and unverified accounts
     // The reset process itself serves as verification (user must have access to email/phone)
     
-    // Generate reset code
+    // Generate reset code with 24 hour expiration (same as registration)
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const resetCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Store reset code in verification_code field (reusing existing infrastructure)
     await db.query(
