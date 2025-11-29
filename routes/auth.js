@@ -1072,7 +1072,11 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Reject password reset for deleted/inactive accounts BEFORE sending SMS/email
-    if (user.account_status === 'inactive') {
+    // Check account_status explicitly - must be 'active' or 'pending_verification' to proceed
+    console.log(`🔍 Checking account status for password reset: ${user.email || user.phone_number}, status: ${user.account_status}`);
+    
+    if (!user.account_status || user.account_status === 'inactive') {
+      console.log(`🚫 Blocking password reset for inactive account: ${user.email || user.phone_number}, status: ${user.account_status}`);
       // Don't reveal that account is deleted (security best practice)
       return res.json({
         message: 'If an account exists with this ' + (phoneNumber ? 'phone number' : 'email') + ', a password reset code has been sent.'
@@ -1097,7 +1101,16 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     // Send password reset code via SMS if phone number provided, otherwise email
+    // Double-check account status before sending (defensive programming)
+    if (!user.account_status || user.account_status === 'inactive') {
+      console.log(`🚫 Second check: Blocking SMS for inactive account: ${user.email || user.phone_number}`);
+      return res.json({
+        message: 'If an account exists with this ' + (phoneNumber ? 'phone number' : 'email') + ', a password reset code has been sent.'
+      });
+    }
+    
     if (phoneNumber && user.phone_number) {
+      console.log(`📱 Sending password reset SMS to: ${user.phone_number}, account_status: ${user.account_status}`);
       const smsResult = await smsService.sendPasswordResetSMS(user.phone_number, resetCode, user.first_name || 'User');
       
       if (!smsResult.success) {
