@@ -88,13 +88,21 @@ router.post('/register', validateRegistration, async (req, res) => {
       if (!user.email_verified && user.account_status === 'pending_verification') {
         const now = new Date();
         const codeExpires = user.verification_code_expires ? new Date(user.verification_code_expires) : null;
-        const codeValid = codeExpires && now < codeExpires;
+        const codeValid = codeExpires && now < codeExpires && user.verification_code;
         const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
         
-        if (codeValid && user.verification_code) {
+        console.log('🔍 Checking verification code status:', {
+          hasCode: !!user.verification_code,
+          codeExpires: codeExpires ? codeExpires.toISOString() : 'null',
+          now: now.toISOString(),
+          codeValid: codeValid
+        });
+        
+        if (codeValid) {
           // Code is still valid (within 24 hours) - prompt user to enter existing code
-          console.log('✅ Existing verification code is still valid');
+          // DO NOT send a new SMS - reuse existing code
           const timeRemaining = Math.floor((codeExpires.getTime() - now.getTime()) / 1000 / 60); // minutes
+          console.log('✅ Existing verification code is still valid - NOT sending new SMS. Time remaining:', timeRemaining, 'minutes');
           
           return res.status(200).json({
             message: 'Please enter the verification code sent to your phone.',
@@ -1251,24 +1259,41 @@ router.post('/resend-verification', async (req, res) => {
       });
     }
 
-    // Rate limiting removed for app store release (scaling handled by Railway)
-    // const lastResend = user.last_verification_attempt;
-    // if (lastResend) {
-    //   const timeSinceLastResend = Date.now() - new Date(lastResend).getTime();
-    //   const resendCooldown = 60 * 60 * 1000; // 1 hour
-    //
-    //   if (timeSinceLastResend < resendCooldown) {
-    //     const remainingTime = Math.ceil((resendCooldown - timeSinceLastResend) / 1000 / 60);
-    //     return res.status(429).json({
-    //       error: 'Rate limited',
-    //       message: `Please wait ${remainingTime} minutes before requesting another verification code.`
-    //     });
-    //   }
-    // }
+    // Check if existing verification code is still valid (within 24 hours)
+    const now = new Date();
+    const codeExpires = user.verification_code_expires ? new Date(user.verification_code_expires) : null;
+    const codeValid = codeExpires && now < codeExpires && user.verification_code;
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    
+    if (codeValid) {
+      // Code is still valid - do NOT send new SMS, just return success
+      const timeRemaining = Math.floor((codeExpires.getTime() - now.getTime()) / 1000 / 60); // minutes
+      console.log('✅ Resend requested but code still valid - NOT sending new SMS. Time remaining:', timeRemaining, 'minutes');
+      
+      // Return success without sending new SMS
+      if (phoneNumber && user.phone_number) {
+        return res.json({
+          message: 'Your existing verification code is still valid. Please check your phone for the code sent earlier.',
+          codeStillValid: true,
+          timeRemainingMinutes: timeRemaining,
+          phoneNumber: user.phone_number
+        });
+      } else if (email && user.email) {
+        return res.json({
+          message: 'Your existing verification code is still valid. Please check your email for the code sent earlier.',
+          codeStillValid: true,
+          timeRemainingMinutes: timeRemaining,
+          email: user.email
+        });
+      }
+    }
+
+    // Code expired or doesn't exist - generate and send new code
+    console.log('🔄 Code expired or missing - generating and sending new verification code');
 
     // Generate new verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const verificationExpires = new Date(Date.now() + twentyFourHours); // 24 hours
 
     // Update user with new code
     await db.query(
