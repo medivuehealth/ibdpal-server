@@ -282,7 +282,7 @@ class SMSService {
       console.log(`📱 Formatted phone number: ${formattedPhone}`);
 
       // Create SMS message
-      const message = `Your IBDPal password reset code is: ${resetCode}\n\nThis code will expire in 15 minutes.\n\nIf you didn't request a password reset, please ignore this message.`;
+      const message = `Your IBDPal password reset code is: ${resetCode}\n\nThis code will expire in 24 hours.\n\nIf you didn't request a password reset, please ignore this message.`;
 
       // Send via Twilio API
       const result = await this.sendViaTwilioAPI(formattedPhone, message);
