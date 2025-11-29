@@ -1072,11 +1072,13 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Reject password reset for deleted/inactive accounts BEFORE sending SMS/email
-    // Check account_status explicitly - must be 'active' or 'pending_verification' to proceed
+    // Only allow 'active' or 'pending_verification' status - reject everything else
     console.log(`🔍 Checking account status for password reset: ${user.email || user.phone_number}, status: ${user.account_status}`);
     
-    if (!user.account_status || user.account_status === 'inactive') {
-      console.log(`🚫 Blocking password reset for inactive account: ${user.email || user.phone_number}, status: ${user.account_status}`);
+    // Explicitly check - only allow active or pending_verification accounts
+    const allowedStatuses = ['active', 'pending_verification'];
+    if (!user.account_status || !allowedStatuses.includes(user.account_status)) {
+      console.log(`🚫 Blocking password reset for inactive/invalid account: ${user.email || user.phone_number}, status: ${user.account_status}`);
       // Don't reveal that account is deleted (security best practice)
       return res.json({
         message: 'If an account exists with this ' + (phoneNumber ? 'phone number' : 'email') + ', a password reset code has been sent.'
@@ -1101,9 +1103,17 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     // Send password reset code via SMS if phone number provided, otherwise email
-    // Double-check account status before sending (defensive programming)
-    if (!user.account_status || user.account_status === 'inactive') {
-      console.log(`🚫 Second check: Blocking SMS for inactive account: ${user.email || user.phone_number}`);
+    // Final check before sending - ensure account is still valid
+    if (!user.account_status || !allowedStatuses.includes(user.account_status)) {
+      console.log(`🚫 Final check: Blocking SMS for inactive account: ${user.email || user.phone_number}, status: ${user.account_status}`);
+      // Clear the reset code since we're not sending
+      await db.query(
+        `UPDATE users 
+         SET verification_code = NULL, 
+             verification_code_expires = NULL
+         WHERE user_id = $1`,
+        [user.user_id]
+      );
       return res.json({
         message: 'If an account exists with this ' + (phoneNumber ? 'phone number' : 'email') + ', a password reset code has been sent.'
       });
