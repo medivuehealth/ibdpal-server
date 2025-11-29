@@ -381,16 +381,12 @@ router.post('/login', validateLogin, formatValidationErrors, async (req, res) =>
       });
     }
 
-    // Check account status and reactivate if inactive
+    // Check account status - reject login for deleted/inactive accounts
     if (user.account_status === 'inactive') {
-      // Reactivate the account
-      await db.query(
-        `UPDATE users 
-         SET account_status = 'active', updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1`,
-        [user.user_id]
-      );
-      console.log(`Account reactivated for user: ${user.email}`);
+      return res.status(403).json({
+        error: 'Account deleted',
+        message: 'This account has been deleted and cannot be accessed. Please contact support if you believe this is an error.'
+      });
     }
 
     // Check if account is locked
