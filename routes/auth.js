@@ -1071,6 +1071,14 @@ router.post('/forgot-password', async (req, res) => {
       user = userResult.rows[0];
     }
 
+    // Reject password reset for deleted/inactive accounts
+    if (user.account_status === 'inactive') {
+      // Don't reveal that account is deleted (security best practice)
+      return res.json({
+        message: 'If an account exists with this ' + (phoneNumber ? 'phone number' : 'email') + ', a password reset code has been sent.'
+      });
+    }
+
     // Allow password reset for both verified and unverified accounts
     // The reset process itself serves as verification (user must have access to email/phone)
     
@@ -1209,6 +1217,14 @@ router.post('/reset-password', async (req, res) => {
       user = userResult.rows[0];
     }
 
+    // Reject password reset for deleted/inactive accounts
+    if (user.account_status === 'inactive') {
+      return res.status(403).json({
+        error: 'Account deleted',
+        message: 'This account has been deleted and cannot be accessed. Please contact support if you believe this is an error.'
+      });
+    }
+
     // Allow password reset for both verified and unverified accounts
     // The reset process itself serves as verification (user must have access to email/phone)
     
@@ -1233,18 +1249,20 @@ router.post('/reset-password', async (req, res) => {
 
     // Update password, clear reset code, and auto-verify account
     // Since user received the reset code via email/phone, they've proven ownership
+    // Only set account_status to 'active' if it's not already inactive (deleted)
+    const accountStatus = user.account_status === 'inactive' ? 'inactive' : 'active';
     await db.query(
       `UPDATE users 
        SET password_hash = $1,
            email_verified = TRUE,
-           account_status = 'active',
+           account_status = $2,
            verification_code = NULL,
            verification_code_expires = NULL,
            last_verification_attempt = NULL,
            password_last_changed = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $2`,
-      [newPasswordHash, user.user_id]
+       WHERE user_id = $3`,
+      [newPasswordHash, accountStatus, user.user_id]
     );
 
     res.json({
